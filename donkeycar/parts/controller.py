@@ -1025,7 +1025,7 @@ class PS3JoystickController(JoystickController):
 
         self.axis_trigger_map = {
             'left_stick_horz' : self.set_steering,
-            'right_stick_vert' : self.set_throttle,
+            'left_stick_vert' : self.set_throttle,
         }
 
 
@@ -1068,7 +1068,7 @@ class PS4JoystickController(JoystickController):
 
         self.axis_trigger_map = {
             'left_stick_horz' : self.set_steering,
-            'right_stick_vert' : self.set_throttle,
+            'left_stick_vert' : self.set_throttle,
         }
 
 
@@ -1128,7 +1128,7 @@ class XboxOneJoystickController(JoystickController):
 
         self.axis_trigger_map = {
             'left_stick_horz': self.set_steering,
-            'right_stick_vert': self.set_throttle,
+            'left_stick_vert': self.set_throttle,
             # Forza Mode
             'right_trigger': self.magnitude(),
             'left_trigger': self.magnitude(reversed = True),
@@ -1180,7 +1180,7 @@ class LogitechJoystickController(JoystickController):
 
         self.axis_trigger_map = {
             'left_stick_horz': self.set_steering,
-            'right_stick_vert': self.set_throttle,
+            'left_stick_vert': self.set_throttle,
             'dpad_leftright' : self.on_axis_dpad_LR,
             'dpad_up_down' : self.on_axis_dpad_UD,
         }
@@ -1238,7 +1238,7 @@ class NimbusController(JoystickController):
 
         self.axis_trigger_map = {
             'lx' : self.set_steering,
-            'ry' : self.set_throttle,
+            'ly' : self.set_throttle,
         }
 
 
@@ -1270,7 +1270,7 @@ class WiiUController(JoystickController):
 
         self.axis_trigger_map = {
             'LEFT_STICK_X' : self.set_steering,
-            'RIGHT_STICK_Y' : self.set_throttle,
+            'LEFT_STICK_Y' : self.set_throttle,
         }
 
 
