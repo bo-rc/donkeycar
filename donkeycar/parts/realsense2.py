@@ -83,11 +83,55 @@ class RS_T265(object):
         self.pipe.stop()
 
 
+class RS_D435i(object):
+    '''
+    The Intel Realsense D435i camera is a RGBD camera with imu
+    '''
 
-if __name__ == "__main__":
-    c = RS_T265()
-    while True:
-        pos, vel, acc = c.run()
-        print(pos)
+    def __init__(self, image_w=320, image_h=240, framerate=30, img_type='color'):
+        self.pipe = rs.pipeline()
+        cfg = rs.config()
+        self.img_type = img_type
+
+        if self.img_type is 'color':
+            cfg.enable_stream(rs.stream.color, image_w, image_h, rs.format.bgr8, framerate)
+        elif self.img_type is 'depth':
+            cfg.enable_stream(rs.stream.depth, image_w, image_h, rs.format.z16, framerate)
+        else:
+            raise Exception("img_type not supported.")
+
+        # Start streaming with requested config
+        self.pipe.start(cfg)
+        self.running = True
+        
+        self.img = None
+
+    def poll(self):
+        try:
+            frames = self.pipe.wait_for_frames()
+        except Exception as e:
+            logging.error(e)
+            return
+
+        if self.img_type is 'color':
+            self.img = np.asanyarray(frames.get_color_frame().get_data())
+        elif self.img_type is 'depth':
+            self.img = np.asanyarray(frames.get_depth_frame().get_data())
+        else:
+            raise Exception("img_type not supported.")
+
+    def update(self):
+        while self.running:
+            self.poll()
+
+    def run_threaded(self):
+        return self.img
+
+    def run(self):
+        self.poll()
+        return self.run_threaded()
+
+    def shutdown(self):
+        self.running = False
         time.sleep(0.1)
-    c.shutdown()
+        self.pipe.stop()
