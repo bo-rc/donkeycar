@@ -59,23 +59,10 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
     V = dk.vehicle.Vehicle()
 
     if camera_type == "stereo":
+        from donkeycar.parts.realsense2 import RS_T265
+        cam = RS_T265(stereo=True) 
 
-        if cfg.CAMERA_TYPE == "WEBCAM":
-            from donkeycar.parts.camera import Webcam            
-
-            camA = Webcam(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH, iCam = 0)
-            camB = Webcam(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH, iCam = 1)
-
-        elif cfg.CAMERA_TYPE == "CVCAM":
-            from donkeycar.parts.cv import CvCam
-
-            camA = CvCam(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH, iCam = 0)
-            camB = CvCam(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH, iCam = 1)
-        else:
-            raise(Exception("Unsupported camera type: %s" % cfg.CAMERA_TYPE))
-
-        V.add(camA, outputs=['cam/image_array_a'], threaded=True)
-        V.add(camB, outputs=['cam/image_array_b'], threaded=True)
+        V.add(cam, outputs=['cam/image_array_a', 'cam/image_array_b'], threaded=True)
 
         from donkeycar.parts.image import StereoPair
 
@@ -113,9 +100,13 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
         elif cfg.CAMERA_TYPE == "MOCK":
             from donkeycar.parts.camera import MockCamera
             cam = MockCamera(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH)
+        elif cfg.CAMERA_TYPE == "RS_T265":
+            from donkeycar.parts.realsense2 import RS_T265
+            cam = RS_T265()
         elif cfg.CAMERA_TYPE == "RS_D435i":
             from donkeycar.parts.realsense2 import RS_D435i
-            cam = RS_D435i(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, img_type=cfg.RS_IMG_TYPE)
+            print("Args: ", "image_w=", cfg.IMAGE_W, " image_h=", cfg.IMAGE_H, " img_type=", cfg.RS_IMG_TYPE, " frame_rate=", cfg.RS_FRAME_RATE)
+            cam = RS_D435i(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, img_type=cfg.RS_IMG_TYPE, frame_rate=cfg.RS_FRAME_RATE)
         else:
             raise(Exception("Unkown camera type: %s" % cfg.CAMERA_TYPE))
             

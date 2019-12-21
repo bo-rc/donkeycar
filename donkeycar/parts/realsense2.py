@@ -17,9 +17,10 @@ class RS_T265(object):
     is remarkably consistent.
     '''
 
-    def __init__(self, image_output=False):
+    def __init__(self, stereo=False, image_output=True):
         #Using the image_output will grab two image streams from the fisheye cameras but return only one.
         #This can be a bit much for USB2, but you can try it. Docs recommend USB3 connection for this.
+        self.stereo = stereo
         self.image_output = image_output
 
         # Declare RealSense pipeline, encapsulating the actual device and sensors
@@ -40,7 +41,8 @@ class RS_T265(object):
         self.pos = zero_vec
         self.vel = zero_vec
         self.acc = zero_vec
-        self.img = None
+        self.limg = None
+        self.rimg = None
 
     def poll(self):
         try:
@@ -50,11 +52,9 @@ class RS_T265(object):
             return
 
         if self.image_output:
-            #We will just get one image for now.
-            # Left fisheye camera frame
-            left = frames.get_fisheye_frame(1)
-            self.img = np.asanyarray(left.get_data())
-
+            self.limg = np.asanyarray(frames.get_fisheye_frame(1).get_data())
+            if self.stereo:
+                self.rimg = np.asanyarray(frames.get_fisheye_frame(2).get_data())
 
         # Fetch pose frame
         pose = frames.get_pose_frame()
@@ -71,7 +71,10 @@ class RS_T265(object):
             self.poll()
 
     def run_threaded(self):
-        return self.pos, self.vel, self.acc, self.img
+        if self.stereo:
+            return self.limg, self.rimg
+        else:
+            return self.limg
 
     def run(self):
         self.poll()
@@ -88,17 +91,17 @@ class RS_D435i(object):
     The Intel Realsense D435i camera is a RGBD camera with imu
     '''
 
-    def __init__(self, image_w=320, image_h=240, framerate=30, img_type='color'):
+    def __init__(self, image_w=320, image_h=240, frame_rate=30, img_type='color'):
         self.pipe = rs.pipeline()
         cfg = rs.config()
         self.img_type = img_type
 
-        if self.img_type is 'color':
-            cfg.enable_stream(rs.stream.color, image_w, image_h, rs.format.bgr8, framerate)
-        elif self.img_type is 'depth':
-            cfg.enable_stream(rs.stream.depth, image_w, image_h, rs.format.z16, framerate)
+        if self.img_type == 'color':
+            cfg.enable_stream(rs.stream.color, image_w, image_h, rs.format.bgr8, frame_rate)
+        elif self.img_type == 'depth':
+            cfg.enable_stream(rs.stream.depth, image_w, image_h, rs.format.z16, frame_rate)
         else:
-            raise Exception("img_type not supported.")
+            raise Exception("img_type >", img_type, "< not supported.")
 
         # Start streaming with requested config
         self.pipe.start(cfg)
@@ -118,7 +121,7 @@ class RS_D435i(object):
         elif self.img_type is 'depth':
             self.img = np.asanyarray(frames.get_depth_frame().get_data())
         else:
-            raise Exception("img_type not supported.")
+            raise Exception("img_type >", self.img_type, "< not supported.")
 
     def update(self):
         while self.running:

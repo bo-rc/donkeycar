@@ -9,11 +9,20 @@
 # """
 
 # #CAMERA
-CAMERA_TYPE = "CSIC"   # (PICAM|WEBCAM|CVCAM|CSIC|V4L|MOCK)
-IMAGE_W = 224
-IMAGE_H = 224
+#CAMERA_TYPE = "CSIC"   # (PICAM|WEBCAM|CVCAM|CSIC|V4L|MOCK)
+#IMAGE_W = 224
+#IMAGE_H = 224
 
-PCA9685_I2C_BUSNUM = 1
+# #RealSense CAMERA
+DRIVE_LOOP_HZ = 15
+CAMERA_TYPE = "RS_D435i"   # (RS_D435i|RS_T265|PICAM|WEBCAM|CVCAM|CSIC|V4L|MOCK)
+IMAGE_W = 640 
+IMAGE_H = 480 
+RS_FRAME_RATE = DRIVE_LOOP_HZ
+RS_IMG_TYPE = "color"
+
+# PWM driver
+PCA9685_I2C_BUSNUM = 1 
 
 # #STEERING - Dakar
 STEERING_CHANNEL = 0            #channel on the 9685 pwm board 0-15
@@ -28,4 +37,5 @@ THROTTLE_REVERSE_PWM = 300 #pwm value for max reverse throttle
 
 DEFAULT_MODEL_TYPE = 'rnn'   #(linear|categorical|rnn|imu|behavior|3d|localizer|latent)
 
-CONTROLLER_TYPE='xbox'               #(ps3|ps4|xbox|nimbus|wiiu|F710|rc3)
+CONTROLLER_TYPE='xbox'               #(ps3|ps4|xbox|nimbus|wiiu|F710|rc3)# import os
+

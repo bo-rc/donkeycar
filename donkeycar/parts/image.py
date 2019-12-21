@@ -35,9 +35,9 @@ class StereoPair:
         One in red, the other in green, and diff in blue channel.
         '''
         if image_a is not None and image_b is not None:
-            width, height, _ = image_a.shape
-            grey_a = dk.utils.rgb2gray(image_a)
-            grey_b = dk.utils.rgb2gray(image_b)
+            width, height = image_a.shape
+            grey_a = image_a
+            grey_b = image_b
             grey_c = grey_a - grey_b
             
             stereo_image = np.zeros([width, height, 3], dtype=np.dtype('B'))
