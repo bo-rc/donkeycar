@@ -60,9 +60,12 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
 
     if camera_type == "stereo":
         from donkeycar.parts.realsense2 import RS_T265
-        cam = RS_T265(stereo=True) 
+        cam = RS_T265(stereo=True, imu_output=cfg.USE_RS_IMU) 
 
-        V.add(cam, outputs=['cam/image_array_a', 'cam/image_array_b'], threaded=True)
+        if cfg.USE_RS_IMU:
+            V.add(cam, outputs=['cam/image_array_a', 'cam/image_array_b', 'imu/acl_x', 'imu/acl_y', 'imu/acl_z', 'imu/gyr_x', 'imu/gyr_y', 'imu/gyr_z'], threaded=True)
+        else:
+            V.add(cam, outputs=['cam/image_array_a', 'cam/image_array_b'], threaded=True)
 
         from donkeycar.parts.image import StereoPair
 
@@ -102,7 +105,13 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
             cam = MockCamera(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH)
         elif cfg.CAMERA_TYPE == "RS_T265":
             from donkeycar.parts.realsense2 import RS_T265
-            cam = RS_T265()
+            cam = RS_T265(stereo=False, imu_output=cfg.USE_RS_IMU)
+
+            if cfg.USE_RS_IMU:
+               V.add(cam, outputs=['cam/image_array', 'imu/acl_x', 'imu/acl_y', 'imu/acl_z', 'imu/gyr_x', 'imu/gyr_y', 'imu/gyr_z'], threaded=True)
+            else:
+               V.add(cam, outputs=['cam/image_array'], threaded=True) 
+
         elif cfg.CAMERA_TYPE == "RS_D435i":
             from donkeycar.parts.realsense2 import RS_D435i
             print("Args: ", "image_w=", cfg.IMAGE_W, " image_h=", cfg.IMAGE_H, " img_type=", cfg.RS_IMG_TYPE, " frame_rate=", cfg.RS_FRAME_RATE)
@@ -110,7 +119,8 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
         else:
             raise(Exception("Unkown camera type: %s" % cfg.CAMERA_TYPE))
             
-        V.add(cam, inputs=inputs, outputs=['cam/image_array'], threaded=threaded)
+        if not cfg.USE_RS_IMU:
+            V.add(cam, inputs=inputs, outputs=['cam/image_array'], threaded=threaded)
         
     if use_joystick or cfg.USE_JOYSTICK_AS_DEFAULT:
         #modify max_throttle closer to 1.0 to have more power
@@ -289,8 +299,12 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
         inputs = [inf_input, "behavior/one_hot_state_array"]  
     #IMU
     elif model_type == "imu":
-        assert(cfg.HAVE_IMU)
+        assert(cfg.HAVE_IMU or cfg.USE_RS_IMU)
         #Run the pilot if the mode is not user.
+        inputs=[inf_input,
+            'imu/acl_x', 'imu/acl_y', 'imu/acl_z',
+            'imu/gyr_x', 'imu/gyr_y', 'imu/gyr_z']
+    elif cfg.USE_RS_IMU:
         inputs=[inf_input,
             'imu/acl_x', 'imu/acl_y', 'imu/acl_z',
             'imu/gyr_x', 'imu/gyr_y', 'imu/gyr_z']
@@ -510,7 +524,7 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
         inputs += ['behavior/state', 'behavior/label', "behavior/one_hot_state_array"]
         types += ['int', 'str', 'vector']
     
-    if cfg.HAVE_IMU:
+    if cfg.HAVE_IMU or cfg.USE_RS_IMU:
         inputs += ['imu/acl_x', 'imu/acl_y', 'imu/acl_z',
             'imu/gyr_x', 'imu/gyr_y', 'imu/gyr_z']
 

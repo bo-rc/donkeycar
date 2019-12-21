@@ -9,6 +9,7 @@ import logging
 
 import numpy as np
 import pyrealsense2 as rs
+import math as m
 
 class RS_T265(object):
     '''
@@ -17,7 +18,7 @@ class RS_T265(object):
     is remarkably consistent.
     '''
 
-    def __init__(self, stereo=False, image_output=True):
+    def __init__(self, image_output=True, stereo=False, imu_output=False):
         #Using the image_output will grab two image streams from the fisheye cameras but return only one.
         #This can be a bit much for USB2, but you can try it. Docs recommend USB3 connection for this.
         self.stereo = stereo
@@ -26,7 +27,10 @@ class RS_T265(object):
         # Declare RealSense pipeline, encapsulating the actual device and sensors
         self.pipe = rs.pipeline()
         cfg = rs.config()
-        cfg.enable_stream(rs.stream.pose)
+        
+        self.imu_output = imu_output
+        if self.imu_output:
+            cfg.enable_stream(rs.stream.pose)
 
         if self.image_output:
             #right now it's required for both streams to be enabled
@@ -41,6 +45,7 @@ class RS_T265(object):
         self.pos = zero_vec
         self.vel = zero_vec
         self.acc = zero_vec
+        self.rot = zero_vec
         self.limg = None
         self.rimg = None
 
@@ -51,20 +56,24 @@ class RS_T265(object):
             logging.error(e)
             return
 
+        if self.imu_output:
+            data = frames.get_pose_frame().get_pose_data()
+            self.pos = data.translation
+            self.vel = data.velocity
+            self.acc = data.acceleration
+            w = data.rotation.w
+            x = -data.rotation.z
+            y = data.rotation.x
+            z = -data.rotation.y
+
+            pitch =  -m.asin(2.0 * (x*z - w*y)) * 180.0 / m.pi;
+            roll  =  m.atan2(2.0 * (w*x + y*z), w*w - x*x - y*y + z*z) * 180.0 / m.pi;
+            yaw   =  m.atan2(2.0 * (w*z + x*y), w*w + x*x - y*y - z*z) * 180.0 / m.pi;
+            self.rot = [roll, pitch, yaw]
         if self.image_output:
             self.limg = np.asanyarray(frames.get_fisheye_frame(1).get_data())
             if self.stereo:
                 self.rimg = np.asanyarray(frames.get_fisheye_frame(2).get_data())
-
-        # Fetch pose frame
-        pose = frames.get_pose_frame()
-
-        if pose:
-            data = pose.get_pose_data()
-            self.pos = data.translation
-            self.vel = data.velocity
-            self.acc = data.acceleration
-            logging.debug('realsense pos(%f, %f, %f)' % (self.pos.x, self.pos.y, self.pos.z))
 
     def update(self):
         while self.running:
@@ -72,9 +81,15 @@ class RS_T265(object):
 
     def run_threaded(self):
         if self.stereo:
-            return self.limg, self.rimg
+            if self.imu_output:
+                return self.limg, self.rimg, self.acc.x, self.acc.y, self.acc.z, self.rot[0], self.rot[1], self.rot[2]
+            else:
+                return self.limg, self.rimg
         else:
-            return self.limg
+            if self.imu_output:
+                return self.limg, self.acc.x, self.acc.y, self.acc.z, self.rot[0], self.rot[1], self.rot[2]
+            else:
+                return self.limg
 
     def run(self):
         self.poll()
