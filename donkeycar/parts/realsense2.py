@@ -5,11 +5,197 @@ Date: April 14 2019
 Notes: Parts to input data from Intel Realsense 2 cameras
 '''
 import time
+import cv2
 import logging
 
 import numpy as np
 import pyrealsense2 as rs
 import math as m
+
+"""
+Returns R, T transform from src to dst
+"""
+def get_extrinsics(src, dst):
+    extrinsics = src.get_extrinsics_to(dst)
+    R = np.reshape(extrinsics.rotation, [3,3]).T
+    T = np.array(extrinsics.translation)
+    return (R, T)
+
+"""
+Returns a camera matrix K from librealsense intrinsics
+"""
+def camera_matrix(intrinsics):
+    return np.array([[intrinsics.fx,             0, intrinsics.ppx],
+                     [            0, intrinsics.fy, intrinsics.ppy],
+                     [            0,             0,              1]])
+
+"""
+Returns the fisheye distortion from librealsense intrinsics
+"""
+def fisheye_distortion(intrinsics):
+    return np.array(intrinsics.coeffs[:4])
+
+
+class RS_T265_StereoRectified(object):
+    '''
+    The Intel Realsense T265 camera is a device which uses an imu, twin fisheye cameras,
+    and an Movidius chip to do sensor fusion and emit a world space coordinate frame that 
+    is remarkably consistent.
+    '''
+
+    def __init__(self, image_w=240, fov=120):
+        
+        # Declare RealSense pipeline, encapsulating the actual device and sensors
+        self.pipe = rs.pipeline()
+        cfg = rs.config()
+        cfg.enable_stream(rs.stream.fisheye, 1) # Left camera
+        cfg.enable_stream(rs.stream.fisheye, 2) # Right camera
+
+        # Set up a mutex to share data between threads 
+        from threading import Lock
+        self.frame_mutex = Lock()
+        self.frame_data = {"left"  : None,
+              "right" : None,
+              "timestamp_ms" : None
+              }
+
+        def callback(frame):
+            if frame.is_frameset():
+                frameset = frame.as_frameset()
+                f1 = frameset.get_fisheye_frame(1).as_video_frame()
+                f2 = frameset.get_fisheye_frame(2).as_video_frame()
+                left_data = np.asanyarray(f1.get_data())
+                right_data = np.asanyarray(f2.get_data())
+                ts = frameset.get_timestamp()
+                self.frame_mutex.acquire()
+                self.frame_data["left"] = left_data
+                self.frame_data["right"] = right_data
+                self.frame_data["timestamp_ms"] = ts
+                self.frame_mutex.release()
+
+        # Start streaming with our callback
+        self.pipe.start(cfg, callback)
+        time.sleep(0.5)
+
+        profiles = self.pipe.get_active_profile()
+        streams = {"left"  : profiles.get_stream(rs.stream.fisheye, 1).as_video_stream_profile(),
+               "right" : profiles.get_stream(rs.stream.fisheye, 2).as_video_stream_profile()}
+        intrinsics = {"left"  : streams["left"].get_intrinsics(),
+                  "right" : streams["right"].get_intrinsics()}
+        
+        # Print information about both cameras
+        print(">>>Cal::Intrinsics::Left camera:",  intrinsics["left"])
+        print(">>>Cal::Intrinsics::Right camera:", intrinsics["right"])
+
+        # Translate the intrinsics from librealsense into OpenCV
+        K_left  = camera_matrix(intrinsics["left"])
+        D_left  = fisheye_distortion(intrinsics["left"])
+        K_right = camera_matrix(intrinsics["right"])
+        D_right = fisheye_distortion(intrinsics["right"])
+
+        (R, T) = get_extrinsics(streams["left"], streams["right"])
+        print(">>>Cal::relativeExtrinsics:", (R,T))
+
+        print("initializing FoV: ",fov, " Width px: ", image_w)
+        stereo_fov_rad = fov * (m.pi/180)  # 110 degree desired fov
+        stereo_width_px = image_w          # 300x300 pixel stereo output
+        stereo_focal_px = stereo_width_px/2 / m.tan(stereo_fov_rad/2)
+
+        # We set the left rotation to identity and the right rotation
+        # the rotation between the cameras
+        R_left = np.eye(3)
+        R_right = R
+
+        # The stereo algorithm needs max_disp extra pixels in order to produce valid
+        # disparity on the desired output region. This changes the width, but the
+        # center of projection should be on the center of the cropped image
+        
+        stereo_height_px = stereo_width_px // 2
+        stereo_size = (stereo_width_px, stereo_height_px)
+        stereo_cx = (stereo_height_px - 1)/2
+        stereo_cy = (stereo_height_px - 1)/2
+
+        # Construct the left and right projection matrices, the only difference is
+        # that the right projection matrix should have a shift along the x axis of
+        # baseline*focal_length
+        P_left = np.array([[stereo_focal_px, 0, stereo_cx, 0],
+                        [0, stereo_focal_px, stereo_cy, 0],
+                        [0,               0,         1, 0]])
+        P_right = P_left.copy()
+        P_right[0][3] = T[0]*stereo_focal_px
+
+        # Create an undistortion map for the left and right camera which applies the
+        # rectification and undoes the camera distortion. This only has to be done
+        # once
+        print("creating StereoRectify::UndistortionMap")
+        m1type = cv2.CV_32FC1
+        (lm1, lm2) = cv2.fisheye.initUndistortRectifyMap(K_left, D_left, R_left, P_left, stereo_size, m1type)
+        (rm1, rm2) = cv2.fisheye.initUndistortRectifyMap(K_right, D_right, R_right, P_right, stereo_size, m1type)
+        self.undistort_rectify = {"left"  : (lm1, lm2),
+                            "right" : (rm1, rm2)}
+        self.img = None
+        self.running = True
+
+    def poll(self):
+        try:
+            self.frame_mutex.acquire()
+            valid = self.frame_data["timestamp_ms"] is not None
+            self.frame_mutex.release()
+        except Exception as e:
+            logging.error(e)
+            return
+
+        # If frames are ready to process
+        if valid:
+            # Hold the mutex only long enough to copy the stereo frames
+            self.frame_mutex.acquire()
+            frame_copy = {"left"  : self.frame_data["left"].copy(),
+                          "right" : self.frame_data["right"].copy()}
+            self.frame_mutex.release()
+
+            # Undistort and crop the center of the frames
+            center_undistorted = {"left" : cv2.remap(src = frame_copy["left"],
+                                          map1 = self.undistort_rectify["left"][0],
+                                          map2 = self.undistort_rectify["left"][1],
+                                          interpolation = cv2.INTER_LINEAR),
+                                  "right" : cv2.remap(src = frame_copy["right"],
+                                          map1 = self.undistort_rectify["right"][0],
+                                          map2 = self.undistort_rectify["right"][1],
+                                          interpolation = cv2.INTER_LINEAR)}
+
+            img_l = center_undistorted["left"]
+            img_r = center_undistorted["right"]
+
+            if img_l is not None and img_r is not None:
+                width, height = img_l.shape
+                grey_a = img_l
+                grey_b = img_r
+                grey_c = grey_a - grey_b
+                
+                stereo_image = np.zeros([width, height, 3], dtype=np.dtype('B'))
+                stereo_image[...,0] = np.reshape(grey_a, (width, height))
+                stereo_image[...,1] = np.reshape(grey_b, (width, height))
+                stereo_image[...,2] = np.reshape(grey_c, (width, height))
+
+                self.img = np.array(stereo_image)
+
+
+    def update(self):
+        while self.running:
+            self.poll()
+
+    def run_threaded(self):
+        return self.img
+
+    def run(self):
+        self.poll()
+        return self.run_threaded()
+
+    def shutdown(self):
+        self.running = False
+        time.sleep(0.1)
+        self.pipe.stop()
+
 
 class RS_T265(object):
     '''
@@ -72,9 +258,9 @@ class RS_T265(object):
             y = data.rotation.x
             z = -data.rotation.y
 
-            pitch =  -m.asin(2.0 * (x*z - w*y)) * 180.0 / m.pi;
-            roll  =  m.atan2(2.0 * (w*x + y*z), w*w - x*x - y*y + z*z) * 180.0 / m.pi;
-            yaw   =  m.atan2(2.0 * (w*z + x*y), w*w + x*x - y*y - z*z) * 180.0 / m.pi;
+            pitch =  -m.asin(2.0 * (x*z - w*y)) * 180.0 / m.pi
+            roll  =  m.atan2(2.0 * (w*x + y*z), w*w - x*x - y*y + z*z) * 180.0 / m.pi
+            yaw   =  m.atan2(2.0 * (w*z + x*y), w*w + x*x - y*y - z*z) * 180.0 / m.pi
             self.rot = [roll, pitch, yaw]
         if self.image_output:
             self.limg = np.asanyarray(frames.get_fisheye_frame(1).get_data())
@@ -87,7 +273,7 @@ class RS_T265(object):
 
     def run_threaded(self):
         if self.motion:
-            return self.pos.x, self.pos.y, self.pos.z, self.vel.x, self.vel.y, self.vel.z, self.acc.x, self.acc.y, self.acc.z, self.rot[0], self.rot[1], self.rot[2]
+            return self.vel.x, self.vel.y, self.vel.z, self.acc.x, self.acc.y, self.acc.z, self.rot[0], self.rot[1], self.rot[2]
         
         if self.stereo:
             if self.imu_output:
@@ -162,3 +348,13 @@ class RS_D435i(object):
         self.running = False
         time.sleep(0.1)
         self.pipe.stop()
+
+if __name__ == "__main__":
+    iter = 0
+    cam = RS_T265_StereoRectified()
+    WINDOW_TITLE = 'Realsense'
+    cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_NORMAL)
+    while True:
+        img = cam.run()
+        cv2.imshow(WINDOW_TITLE,img)
+        key = cv2.waitKey(1)

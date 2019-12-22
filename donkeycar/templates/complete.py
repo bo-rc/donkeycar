@@ -116,6 +116,11 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
             from donkeycar.parts.realsense2 import RS_D435i
             print("Args: ", "image_w=", cfg.IMAGE_W, " image_h=", cfg.IMAGE_H, " img_type=", cfg.RS_IMG_TYPE, " frame_rate=", cfg.RS_FRAME_RATE)
             cam = RS_D435i(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, img_type=cfg.RS_IMG_TYPE, frame_rate=cfg.RS_FRAME_RATE)
+        elif cfg.CAMERA_TYPE == "RS_T265_StereoRectified":
+            from donkeycar.parts.realsense2 import RS_T265_StereoRectified
+            print("Stereo-rectified pair of grey-scale images packed as a 3-ch image:")
+            print("Args: ", "image_w=", cfg.IMAGE_W, " fov=", cfg.RS_FOV)
+            cam = RS_T265_StereoRectified(image_w=cfg.IMAGE_W, fov=cfg.RS_FOV)
         else:
             raise(Exception("Unkown camera type: %s" % cfg.CAMERA_TYPE))
             
@@ -270,7 +275,7 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
     if model_type == "motion":
         from donkeycar.parts.realsense2 import RS_T265
         motion = RS_T265(motion=True)
-        V.add(motion, outputs=['motion/pos_x', 'motion/pos_y', 'motion/pos_z',
+        V.add(motion, outputs=[
             'motion/vel_x', 'motion/vel_y', 'motion/vel_z',
             'motion/acl_x', 'motion/acl_y', 'motion/acl_z',
             'motion/gyr_x', 'motion/gyr_y', 'motion/gyr_z'])
@@ -318,7 +323,6 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
             'imu/gyr_x', 'imu/gyr_y', 'imu/gyr_z']
     elif model_type == "motion":
         inputs = [inf_input,
-            'motion/pos_x', 'motion/pos_y', 'motion/pos_z',
             'motion/vel_x', 'motion/vel_y', 'motion/vel_z',
             'motion/acl_x', 'motion/acl_y', 'motion/acl_z',
             'motion/gyr_x', 'motion/gyr_y', 'motion/gyr_z']
@@ -546,7 +550,7 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
            'float', 'float', 'float']
     
     if model_type == "motion":
-        inputs += ['motion/pos_x', 'motion/pos_y', 'motion/pos_z',
+        inputs += [
             'motion/vel_x', 'motion/vel_y', 'motion/vel_z',
             'motion/acl_x', 'motion/acl_y', 'motion/acl_z',
             'motion/gyr_x', 'motion/gyr_y', 'motion/gyr_z']

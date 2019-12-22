@@ -15,8 +15,9 @@ IMAGE_H = 224
 
 # #RealSense CAMERA
 #DRIVE_LOOP_HZ = 15
-#CAMERA_TYPE = "RS_D435i"   # (RS_D435i|RS_T265|PICAM|WEBCAM|CVCAM|CSIC|V4L|MOCK)
-#IMAGE_W = 640 
+CAMERA_TYPE = "RS_T265_StereoRectified"   # (RS_D435i|RS_T265|RS_T265_StereoRectified|PICAM|WEBCAM|CVCAM|CSIC|V4L|MOCK)
+IMAGE_W = 240
+FOV=120 
 #IMAGE_H = 480 
 #RS_FRAME_RATE = DRIVE_LOOP_HZ
 #RS_IMG_TYPE = "color"
@@ -36,7 +37,7 @@ THROTTLE_FORWARD_PWM = 480 #pwm value for max forward throttle
 THROTTLE_STOPPED_PWM = 390      #pwm value for no movement
 THROTTLE_REVERSE_PWM = 300 #pwm value for max reverse throttle
 
-DEFAULT_MODEL_TYPE = 'motion'   #(linear|categorical|rnn|imu|motion|behavior|3d|localizer|latent)
+DEFAULT_MODEL_TYPE = 'rnn'   #(linear|categorical|rnn|imu|motion|behavior|3d|localizer|latent)
 
 CONTROLLER_TYPE='xbox'               #(ps3|ps4|xbox|nimbus|wiiu|F710|rc3)# import os
 
