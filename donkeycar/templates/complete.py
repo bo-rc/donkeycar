@@ -266,6 +266,14 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
         imu = Mpu6050()
         V.add(imu, outputs=['imu/acl_x', 'imu/acl_y', 'imu/acl_z',
             'imu/gyr_x', 'imu/gyr_y', 'imu/gyr_z'], threaded=True)
+    
+    if model_type == "motion":
+        from donkeycar.parts.realsense2 import RS_T265
+        motion = RS_T265(motion=True)
+        V.add(motion, outputs=['motion/pos_x', 'motion/pos_y', 'motion/pos_z',
+            'motion/vel_x', 'motion/vel_y', 'motion/vel_z',
+            'motion/acl_x', 'motion/acl_y', 'motion/acl_z',
+            'motion/gyr_x', 'motion/gyr_y', 'motion/gyr_z'])
 
     class ImgPreProcess():
         '''
@@ -308,6 +316,12 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
         inputs=[inf_input,
             'imu/acl_x', 'imu/acl_y', 'imu/acl_z',
             'imu/gyr_x', 'imu/gyr_y', 'imu/gyr_z']
+    elif model_type == "motion":
+        inputs = [inf_input,
+            'motion/pos_x', 'motion/pos_y', 'motion/pos_z',
+            'motion/vel_x', 'motion/vel_y', 'motion/vel_z',
+            'motion/acl_x', 'motion/acl_y', 'motion/acl_z',
+            'motion/gyr_x', 'motion/gyr_y', 'motion/gyr_z']
     else:
         inputs=[inf_input]
 
@@ -529,6 +543,17 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
             'imu/gyr_x', 'imu/gyr_y', 'imu/gyr_z']
 
         types +=['float', 'float', 'float',
+           'float', 'float', 'float']
+    
+    if model_type == "motion":
+        inputs += ['motion/pos_x', 'motion/pos_y', 'motion/pos_z',
+            'motion/vel_x', 'motion/vel_y', 'motion/vel_z',
+            'motion/acl_x', 'motion/acl_y', 'motion/acl_z',
+            'motion/gyr_x', 'motion/gyr_y', 'motion/gyr_z']
+
+        types +=['float', 'float', 'float',
+           'float', 'float', 'float',
+           'float', 'float', 'float',
            'float', 'float', 'float']
 
     if cfg.RECORD_DURING_AI:

@@ -18,18 +18,24 @@ class RS_T265(object):
     is remarkably consistent.
     '''
 
-    def __init__(self, image_output=True, stereo=False, imu_output=False):
+    def __init__(self, image_w=100, image_h=100, frame_rate=15, image_output=True, stereo=False, imu_output=False, motion=False):
         #Using the image_output will grab two image streams from the fisheye cameras but return only one.
         #This can be a bit much for USB2, but you can try it. Docs recommend USB3 connection for this.
         self.stereo = stereo
         self.image_output = image_output
+        self.imu_output = imu_output
+        self.motion = motion
+
+        if self.motion:
+            self.stereo = False
+            self.image_output = False
+            self.imu_output = False
 
         # Declare RealSense pipeline, encapsulating the actual device and sensors
         self.pipe = rs.pipeline()
         cfg = rs.config()
         
-        self.imu_output = imu_output
-        if self.imu_output:
+        if self.imu_output or self.motion:
             cfg.enable_stream(rs.stream.pose)
 
         if self.image_output:
@@ -56,7 +62,7 @@ class RS_T265(object):
             logging.error(e)
             return
 
-        if self.imu_output:
+        if self.imu_output or self.motion:
             data = frames.get_pose_frame().get_pose_data()
             self.pos = data.translation
             self.vel = data.velocity
@@ -80,15 +86,18 @@ class RS_T265(object):
             self.poll()
 
     def run_threaded(self):
+        if self.motion:
+            return self.pos.x, self.pos.y, self.pos.z, self.vel.x, self.vel.y, self.vel.z, self.acc.x, self.acc.y, self.acc.z, self.rot[0], self.rot[1], self.rot[2]
+        
         if self.stereo:
             if self.imu_output:
                 return self.limg, self.rimg, self.acc.x, self.acc.y, self.acc.z, self.rot[0], self.rot[1], self.rot[2]
-            else:
+            elif self.image_output:
                 return self.limg, self.rimg
         else:
             if self.imu_output:
                 return self.limg, self.acc.x, self.acc.y, self.acc.z, self.rot[0], self.rot[1], self.rot[2]
-            else:
+            elif self.imu_output:
                 return self.limg
 
     def run(self):
@@ -106,7 +115,7 @@ class RS_D435i(object):
     The Intel Realsense D435i camera is a RGBD camera with imu
     '''
 
-    def __init__(self, image_w=320, image_h=240, frame_rate=30, img_type='color'):
+    def __init__(self, image_w=320, image_h=240, frame_rate=15, img_type='color'):
         self.pipe = rs.pipeline()
         cfg = rs.config()
         self.img_type = img_type
