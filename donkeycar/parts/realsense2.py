@@ -87,19 +87,43 @@ class RS_T265_StereoRectified(object):
         print(">>>Cal::Intrinsics::Left camera:",  intrinsics["left"])
         print(">>>Cal::Intrinsics::Right camera:", intrinsics["right"])
 
+        (R, T) = get_extrinsics(streams["left"], streams["right"])
+        print(">>>Cal::relativeExtrinsics:", (R,T))
+
+        window_size = 5
+        self.min_disp = 0
+        self.num_disp = 112 - self.min_disp
+        self.max_disp = self.min_disp + self.num_disp
+        self.stereo = cv2.StereoSGBM_create(minDisparity = self.min_disp,
+                                   numDisparities = self.num_disp,
+                                   blockSize = 16,
+                                   P1 = 8*3*window_size**2,
+                                   P2 = 32*3*window_size**2,
+                                   disp12MaxDiff = 1,
+                                   uniquenessRatio = 10,
+                                   speckleWindowSize = 100,
+                                   speckleRange = 32)
+        
         # Translate the intrinsics from librealsense into OpenCV
         K_left  = camera_matrix(intrinsics["left"])
         D_left  = fisheye_distortion(intrinsics["left"])
         K_right = camera_matrix(intrinsics["right"])
         D_right = fisheye_distortion(intrinsics["right"])
-
-        (R, T) = get_extrinsics(streams["left"], streams["right"])
-        print(">>>Cal::relativeExtrinsics:", (R,T))
+       
+        # We calculate the undistorted focal length:
+        #
+        #         h
+        # -----------------
+        #  \      |      /
+        #    \    | f  /
+        #     \   |   /
+        #      \ fov /
+        #        \|/
 
         print("initializing FoV: ",fov, " Width px: ", image_w)
         stereo_fov_rad = fov * (m.pi/180)  # 110 degree desired fov
-        stereo_width_px = image_w          # 300x300 pixel stereo output
-        stereo_focal_px = stereo_width_px/2 / m.tan(stereo_fov_rad/2)
+        stereo_height_px = image_w # use image_w to initialize height
+        stereo_focal_px = stereo_height_px/2 / m.tan(stereo_fov_rad/2)
 
         # We set the left rotation to identity and the right rotation
         # the rotation between the cameras
@@ -110,9 +134,9 @@ class RS_T265_StereoRectified(object):
         # disparity on the desired output region. This changes the width, but the
         # center of projection should be on the center of the cropped image
         
-        stereo_height_px = stereo_width_px // 2
+        stereo_width_px = stereo_height_px + self.max_disp
         stereo_size = (stereo_width_px, stereo_height_px)
-        stereo_cx = (stereo_height_px - 1)/2
+        stereo_cx = (stereo_height_px - 1)/2 + self.max_disp
         stereo_cy = (stereo_height_px - 1)/2
 
         # Construct the left and right projection matrices, the only difference is
@@ -123,6 +147,13 @@ class RS_T265_StereoRectified(object):
                         [0,               0,         1, 0]])
         P_right = P_left.copy()
         P_right[0][3] = T[0]*stereo_focal_px
+
+        # Construct Q for use with cv2.reprojectImageTo3D. Subtract max_disp from x
+        # since we will crop the disparity later
+        Q = np.array([[1, 0,       0, -(stereo_cx - self.max_disp)],
+                      [0, 1,       0, -stereo_cy],
+                      [0, 0,       0, stereo_focal_px],
+                      [0, 0, -1/T[0], 0]])
 
         # Create an undistortion map for the left and right camera which applies the
         # rectification and undoes the camera distortion. This only has to be done
@@ -162,20 +193,28 @@ class RS_T265_StereoRectified(object):
                                           map1 = self.undistort_rectify["right"][0],
                                           map2 = self.undistort_rectify["right"][1],
                                           interpolation = cv2.INTER_LINEAR)}
+            # compute the disparity on the center of the frames and convert it to a pixel disparity (divide by DISP_SCALE=16)
+            disparity = self.stereo.compute(center_undistorted["left"], center_undistorted["right"]).astype(np.float32) / 16.0
+            # re-crop just the valid part of the disparity
+            disparity = disparity[:,self.max_disp:]
+            # convert disparity to 0-255 and color it
+            disp_vis = 255*(disparity - self.min_disp)/ self.num_disp
 
-            img_l = center_undistorted["left"]
-            img_r = center_undistorted["right"]
+            img_l = center_undistorted["left"][:,self.max_disp:]
+            img_r = center_undistorted["right"][:,self.max_disp:]
 
             if img_l is not None and img_r is not None:
                 width, height = img_l.shape
-                grey_a = img_l
-                grey_b = img_r
-                grey_c = grey_a - grey_b
+		        # crop ROI to look at the road
+                crop_height = height // 2
+                grey_a = img_l[crop_height:height,0:width]
+                grey_b = img_r[crop_height:height,0:width]
+                grey_c = disp_vis[crop_height:height,0:width]
                 
-                stereo_image = np.zeros([width, height, 3], dtype=np.dtype('B'))
-                stereo_image[...,0] = np.reshape(grey_a, (width, height))
-                stereo_image[...,1] = np.reshape(grey_b, (width, height))
-                stereo_image[...,2] = np.reshape(grey_c, (width, height))
+                stereo_image = np.zeros([crop_height, width, 3], dtype=np.dtype('B'))
+                stereo_image[...,0] = np.reshape(grey_a, (crop_height, width))
+                stereo_image[...,1] = np.reshape(grey_b, (crop_height, width))
+                stereo_image[...,2] = np.reshape(grey_c, (crop_height, width))
 
                 self.img = np.array(stereo_image)
 
