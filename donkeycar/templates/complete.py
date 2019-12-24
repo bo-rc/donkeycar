@@ -119,8 +119,7 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
         elif cfg.CAMERA_TYPE == "RS_T265_StereoRectified":
             from donkeycar.parts.realsense2 import RS_T265_StereoRectified
             print("Stereo-rectified pair of grey-scale images packed as a 3-ch image:")
-            print("Args: ", "image_w=", cfg.IMAGE_W, " fov=", cfg.RS_FOV)
-            cam = RS_T265_StereoRectified(image_w=cfg.IMAGE_W, fov=cfg.RS_FOV)
+            cam = RS_T265_StereoRectified(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, fov=cfg.RS_FOV)
         else:
             raise(Exception("Unkown camera type: %s" % cfg.CAMERA_TYPE))
             

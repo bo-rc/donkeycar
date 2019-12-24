@@ -43,8 +43,12 @@ class RS_T265_StereoRectified(object):
     is remarkably consistent.
     '''
 
-    def __init__(self, image_w=240, fov=120):
-        
+    def __init__(self, image_w=240, image_h=140, fov=120):
+        # T265 image is almost square. image_h defines px count from the bottom (ground)
+        # here we use image_w to determine crop height start px count from the top
+        # crop_height will be used to crop the image for ROI selection
+        self.crop_height = image_w - image_w
+
         # Declare RealSense pipeline, encapsulating the actual device and sensors
         self.pipe = rs.pipeline()
         cfg = rs.config()
@@ -122,7 +126,7 @@ class RS_T265_StereoRectified(object):
 
         print("initializing FoV: ",fov, " Width px: ", image_w)
         stereo_fov_rad = fov * (m.pi/180)  # 110 degree desired fov
-        stereo_height_px = image_w # use image_w to initialize height
+        stereo_height_px = image_w # use image_w to initialize height due to square image
         stereo_focal_px = stereo_height_px/2 / m.tan(stereo_fov_rad/2)
 
         # We set the left rotation to identity and the right rotation
@@ -163,7 +167,7 @@ class RS_T265_StereoRectified(object):
         (lm1, lm2) = cv2.fisheye.initUndistortRectifyMap(K_left, D_left, R_left, P_left, stereo_size, m1type)
         (rm1, rm2) = cv2.fisheye.initUndistortRectifyMap(K_right, D_right, R_right, P_right, stereo_size, m1type)
         self.undistort_rectify = {"left"  : (lm1, lm2),
-                            "right" : (rm1, rm2)}
+                                  "right" : (rm1, rm2)}
         self.img = None
         self.running = True
 
@@ -205,16 +209,14 @@ class RS_T265_StereoRectified(object):
 
             if img_l is not None and img_r is not None:
                 width, height = img_l.shape
-		        # crop ROI to look at the road
-                crop_height = height // 2
-                grey_a = img_l[crop_height:height,0:width]
-                grey_b = img_r[crop_height:height,0:width]
-                grey_c = disp_vis[crop_height:height,0:width]
+                grey_a = img_l[self.crop_height:height,0:width]
+                grey_b = img_r[self.crop_height:height,0:width]
+                grey_c = disp_vis[self.crop_height:height,0:width]
                 
-                stereo_image = np.zeros([crop_height, width, 3], dtype=np.dtype('B'))
-                stereo_image[...,0] = np.reshape(grey_a, (crop_height, width))
-                stereo_image[...,1] = np.reshape(grey_b, (crop_height, width))
-                stereo_image[...,2] = np.reshape(grey_c, (crop_height, width))
+                stereo_image = np.zeros([height - self.crop_height, width, 3], dtype=np.dtype('B'))
+                stereo_image[...,0] = np.reshape(grey_a, (height - self.crop_height, width))
+                stereo_image[...,1] = np.reshape(grey_b, (height - self.crop_height, width))
+                stereo_image[...,2] = np.reshape(grey_c, (height - self.crop_height, width))
 
                 self.img = np.array(stereo_image)
 
@@ -243,7 +245,7 @@ class RS_T265(object):
     is remarkably consistent.
     '''
 
-    def __init__(self, image_w=100, image_h=100, frame_rate=15, image_output=True, stereo=False, imu_output=False, motion=False):
+    def __init__(self, image_output=True, stereo=False, imu_output=False, motion=False):
         #Using the image_output will grab two image streams from the fisheye cameras but return only one.
         #This can be a bit much for USB2, but you can try it. Docs recommend USB3 connection for this.
         self.stereo = stereo
@@ -395,5 +397,12 @@ if __name__ == "__main__":
     cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_NORMAL)
     while True:
         img = cam.run()
-        cv2.imshow(WINDOW_TITLE,img)
-        key = cv2.waitKey(1)
+        origin = img.copy()
+        origin[:,:,1] = img[:,:,0]
+        origin[:,:,2] = img[:,:,0]
+        
+        disparity = cv2.cvtColor(img[:,:,2], cv2.COLOR_GRAY2RGB)
+        disparity = cv2.applyColorMap(cv2.convertScaleAbs(disparity,1), cv2.COLORMAP_JET)
+        
+        cv2.imshow(WINDOW_TITLE,np.hstack([origin, disparity]))
+        key = cv2.waitKey(2)
