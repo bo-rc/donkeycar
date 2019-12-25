@@ -205,12 +205,15 @@ class PWMThrottle:
     def __init__(self, controller=None,
                        max_pulse=300,
                        min_pulse=490,
-                       zero_pulse=350):
+                       zero_pulse=350,
+                       lidar_safe_port=""):
 
         self.controller = controller
         self.max_pulse = max_pulse
         self.min_pulse = min_pulse
         self.zero_pulse = zero_pulse
+
+        self.lidar_safe = False
         
         #send zero pulse to calibrate ESC
         print("Init ESC")
@@ -220,6 +223,19 @@ class PWMThrottle:
         time.sleep(0.01)
         self.controller.set_pulse(self.zero_pulse)
         time.sleep(1)
+
+        if len(lidar_safe_port) > 0:
+            print("starting lidar--->")
+            import PyLidar3
+            self.lidar = PyLidar3.YdLidarG4(lidar_safe_port)
+            time.sleep(1)
+            if self.lidar.Connect():
+                self.lidar.SwitchRangingFrequency()
+                print(self.lidar.GetDeviceInfo())
+                self.lidar_gen = self.lidar.StartScanning()
+                self.lidar_safe = True
+            else:
+                raise Exception("lidar not connected.")
 
 
     def run(self, throttle):
@@ -232,12 +248,24 @@ class PWMThrottle:
                                     self.MIN_THROTTLE, 0, 
                                     self.min_pulse, self.zero_pulse)
 
-        self.controller.set_pulse(pulse)
+        if self.lidar_safe:
+            data = next(self.lidar_gen)
+
+            angles = [0,5,10,15,355,350,345]
+
+            if all(data[i] for i in angles) < 300:
+                print("lidar safety should engage")
+                self.controller.set_pulse(self.zero_pulse)
+            else:
+                self.controller.set_pulse(pulse)
+        else:
+            self.controller.set_pulse(pulse)
         
     def shutdown(self):
         self.run(0) #stop vehicle
-
-
+        if self.lidar_safe:
+            self.lidar.StartScanning()
+            self.lidar.Disconnect()
 
 class Adafruit_DCMotor_Hat:
     ''' 

@@ -479,7 +479,8 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
         throttle = PWMThrottle(controller=throttle_controller,
                                         max_pulse=cfg.THROTTLE_FORWARD_PWM,
                                         zero_pulse=cfg.THROTTLE_STOPPED_PWM, 
-                                        min_pulse=cfg.THROTTLE_REVERSE_PWM)
+                                        min_pulse=cfg.THROTTLE_REVERSE_PWM,
+                                        lidar_safe_port=cfg.LIDAR_SAFE_PORT)
 
         V.add(steering, inputs=['angle'])
         V.add(throttle, inputs=['throttle'])

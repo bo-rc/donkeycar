@@ -43,3 +43,4 @@ CONTROLLER_TYPE='xbox'               #(ps3|ps4|xbox|nimbus|wiiu|F710|rc3)# impor
 AUTO_RECORD_ON_THROTTLE = False      #if true, we will record whenever throttle is not zero. 
                                      #if false, you must manually toggle recording with some other trigger. Usually circle button on joystick.  
 
+LIDAR_SAFE_PORT = '/dev/ttyUSB0'
