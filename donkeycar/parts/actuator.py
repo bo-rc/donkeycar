@@ -180,7 +180,6 @@ class PWMSteering:
         self.left_pulse = left_pulse
         self.right_pulse = right_pulse
 
-
     def run(self, angle):
         #map absolute angle to angle that vehicle can implement.
         pulse = dk.utils.map_range(angle,
@@ -191,7 +190,6 @@ class PWMSteering:
 
     def shutdown(self):
         self.run(0) #set steering straight
-
 
 
 class PWMThrottle:
@@ -221,7 +219,6 @@ class PWMThrottle:
         self.controller.set_pulse(self.zero_pulse)
         time.sleep(1)
 
-
     def run(self, throttle):
         if throttle > 0:
             pulse = dk.utils.map_range(throttle,
@@ -236,8 +233,6 @@ class PWMThrottle:
         
     def shutdown(self):
         self.run(0) #stop vehicle
-
-
 
 class Adafruit_DCMotor_Hat:
     ''' 

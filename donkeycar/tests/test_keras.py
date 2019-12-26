@@ -49,7 +49,7 @@ def test_motion():
     km = KerasMotion()
     assert km.model is not None
     img = get_test_img(km.model)
-    motion = np.random.rand(12).tolist()
+    motion = np.random.rand(9).tolist()
     km.run(img, *motion)
 
 def test_rnn():

@@ -448,7 +448,7 @@ def get_model_by_type(model_type, cfg):
     elif model_type == "imu":
         kl = KerasIMU(num_outputs=2, num_imu_inputs=6, input_shape=input_shape)     
     elif model_type == "motion":
-        kl = KerasMotion(num_outputs=2, num_motion_inputs=12, input_shape=input_shape)    
+        kl = KerasMotion(num_outputs=2, num_motion_inputs=9, input_shape=input_shape)    
     elif model_type == "linear":
         kl = KerasLinear(input_shape=input_shape, roi_crop=roi_crop)
     elif model_type == "tensorrt_linear":
