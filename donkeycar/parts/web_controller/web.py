@@ -191,9 +191,12 @@ class LocalWebControllerPlanner(tornado.web.Application):
         self.listen(self.port)
         tornado.ioloop.IOLoop.instance().start()
 
-    def run_threaded(self, map_arr=None, depth_arr=None):
+    def run_threaded(self, map_arr=None, img_arr=None):
         self.map_arr = map_arr
-        self.img_arr = cv2.cvtColor(depth_arr, cv2.COLOR_GRAY2RGB)
+        if len(img_arr.shape) > 2:
+            self.img_arr = img_arr
+        else:
+            self.img_arr = cv2.cvtColor(img_arr, cv2.COLOR_GRAY2RGB)
         return self.angle, self.throttle, self.mode, self.recording
         
     def run(self, map_arr=None, depth_arr=None):

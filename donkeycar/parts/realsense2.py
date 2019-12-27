@@ -3,6 +3,10 @@ Author: Tawn Kramer
 File: realsense2.py
 Date: April 14 2019
 Notes: Parts to input data from Intel Realsense 2 cameras
+
+example from https://github.com/IntelRealSense
+
+Author: Bo Liu
 '''
 import time
 import cv2
@@ -38,18 +42,18 @@ def fisheye_distortion(intrinsics):
 
 class RS_T265_StereoRectified(object):
     '''
-    The Intel Realsense T265 camera is a device which uses an imu, twin fisheye cameras,
-    and an Movidius chip to do sensor fusion and emit a world space coordinate frame that 
-    is remarkably consistent.
+    Use t265 stereo cameras as a single 3-ch camera stream: left, right, disparity 
+    The left and right images are first stereo-rectified and aligned to the left projection center,
+    then, disparity is computed and put into the 3rd channel.
+    image_w and image_h defines an ROI cropping region with field of view fov in degrees
     '''
 
     def __init__(self, image_w=240, image_h=140, fov=120):
-        # T265 image is almost square. image_h defines px count from the bottom (ground)
+        # T265 image is almost square: 848 x 800. image_h defines px count from the bottom (ground)
         # here we use image_w to determine crop height start px count from the top
-        # crop_height will be used to crop the image for ROI selection
-        self.crop_height = image_w - image_w
+        # crop_height will be used to crop the image for ROI selections
+        self.crop_height = image_w - image_h
 
-        # Declare RealSense pipeline, encapsulating the actual device and sensors
         self.pipe = rs.pipeline()
         cfg = rs.config()
         cfg.enable_stream(rs.stream.fisheye, 1) # Left camera
@@ -96,7 +100,7 @@ class RS_T265_StereoRectified(object):
 
         window_size = 5
         self.min_disp = 0
-        self.num_disp = 112 - self.min_disp
+        self.num_disp = 112 - self.min_disp # 112 is a magic number from RS examples...
         self.max_disp = self.min_disp + self.num_disp
         self.stereo = cv2.StereoSGBM_create(minDisparity = self.min_disp,
                                    numDisparities = self.num_disp,
@@ -125,7 +129,7 @@ class RS_T265_StereoRectified(object):
         #        \|/
 
         print("initializing FoV: ",fov, " Width px: ", image_w)
-        stereo_fov_rad = fov * (m.pi/180)  # 110 degree desired fov
+        stereo_fov_rad = fov * (m.pi/180)  # fov degree desired fov
         stereo_height_px = image_w # use image_w to initialize height due to square image
         stereo_focal_px = stereo_height_px/2 / m.tan(stereo_fov_rad/2)
 
@@ -160,8 +164,7 @@ class RS_T265_StereoRectified(object):
                       [0, 0, -1/T[0], 0]])
 
         # Create an undistortion map for the left and right camera which applies the
-        # rectification and undoes the camera distortion. This only has to be done
-        # once
+        # rectification and undoes the camera distortion.
         print("creating StereoRectify::UndistortionMap")
         m1type = cv2.CV_32FC1
         (lm1, lm2) = cv2.fisheye.initUndistortRectifyMap(K_left, D_left, R_left, P_left, stereo_size, m1type)
@@ -201,7 +204,7 @@ class RS_T265_StereoRectified(object):
             disparity = self.stereo.compute(center_undistorted["left"], center_undistorted["right"]).astype(np.float32) / 16.0
             # re-crop just the valid part of the disparity
             disparity = disparity[:,self.max_disp:]
-            # convert disparity to 0-255 and color it
+            # scale disparity to 0-255
             disp_vis = 255*(disparity - self.min_disp)/ self.num_disp
 
             img_l = center_undistorted["left"][:,self.max_disp:]
@@ -246,8 +249,6 @@ class RS_T265(object):
     '''
 
     def __init__(self, image_output=True, stereo=False, imu_output=False, motion=False, path=False):
-        #Using the image_output will grab two image streams from the fisheye cameras but return only one.
-        #This can be a bit much for USB2, but you can try it. Docs recommend USB3 connection for this.
         self.stereo = stereo
         self.image_output = image_output
         self.imu_output = imu_output
@@ -257,11 +258,11 @@ class RS_T265(object):
             print("will publish path from t265")
 
         if self.motion:
+            print("will publish motion from t265")
             self.stereo = False
             self.image_output = False
             self.imu_output = False
 
-        # Declare RealSense pipeline, encapsulating the actual device and sensors
         self.pipe = rs.pipeline()
         cfg = rs.config()
         
@@ -305,9 +306,7 @@ class RS_T265(object):
             pitch =  -m.asin(2.0 * (x*z - w*y)) * 180.0 / m.pi
             roll  =  m.atan2(2.0 * (w*x + y*z), w*w - x*x - y*y + z*z) * 180.0 / m.pi
             yaw   =  m.atan2(2.0 * (w*z + x*y), w*w + x*x - y*y - z*z) * 180.0 / m.pi
-            self.rot = {'roll': roll,
-                        'pitch': pitch,
-                        'yaw': yaw}
+            self.rot = {'roll': roll, 'pitch': pitch, 'yaw': yaw}
 
         if self.image_output:
             self.limg = np.asanyarray(frames.get_fisheye_frame(1).get_data())
@@ -332,7 +331,7 @@ class RS_T265(object):
         else:
             if self.imu_output:
                 return self.limg, self.acc.x, self.acc.y, self.acc.z, self.rot['roll'], self.rot['pitch'], self.rot['yaw']
-            elif self.imu_output:
+            else:
                 return self.limg
 
     def run(self):
@@ -350,21 +349,23 @@ class RS_D435i(object):
     The Intel Realsense D435i camera is a RGBD camera with imu
     '''
 
-    def __init__(self, image_w=320, image_h=240, frame_rate=15, img_type='color'):
+    def __init__(self, image_w=424, image_h=140, frame_rate=15, img_type='color'):
         self.pipe = rs.pipeline()
         cfg = rs.config()
         self.img_type = img_type
-        self.image_w = image_w
-        self.image_h = image_h
+
+        # please refer to README.md for available resolutions and frame rates
+        self.init_img_w = 424
+        self.init_img_h = 240
+        self.crop_h = self.init_img_h - image_h
 
         if self.img_type == 'color':
-            cfg.enable_stream(rs.stream.color, image_w, image_h, rs.format.bgr8, frame_rate)
+            cfg.enable_stream(rs.stream.color, self.init_img_w, self.init_img_h, rs.format.bgr8, frame_rate)
         elif self.img_type == 'depth':
-            cfg.enable_stream(rs.stream.depth, image_w, image_h, rs.format.z16, frame_rate)
+            cfg.enable_stream(rs.stream.depth, self.init_img_w, self.init_img_h, rs.format.z16, frame_rate)
         else:
             raise Exception("img_type >", img_type, "< not supported.")
 
-        # Start streaming with requested config
         self.pipe.start(cfg)
         self.running = True
         
@@ -378,9 +379,11 @@ class RS_D435i(object):
             return
 
         if self.img_type is 'color':
-            self.img = np.asanyarray(frames.get_color_frame().get_data())
+            data = np.asanyarray(frames.get_color_frame().get_data())
+            self.img = data[self.crop_h:self.init_img_h,0:self.init_img_w]
         elif self.img_type is 'depth':
-            self.img = np.asanyarray(frames.get_depth_frame().get_data())
+            data = np.asanyarray(frames.get_depth_frame().get_data())
+            self.img = data[self.crop_h:self.init_img_h,0:self.init_img_w]
         else:
             raise Exception("img_type >", self.img_type, "< not supported.")
 

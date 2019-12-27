@@ -24,16 +24,16 @@ from donkeycar.parts.throttle_filter import ThrottleFilter
 from donkeycar.parts.launch import AiLaunch
 from donkeycar.parts.path import Path, PathPlot, CTE, CTE2, PID_Pilot, PlotPose, PImage, OriginOffset, PosStream, gray2color
 from donkeycar.parts.transform import PIDController
+from donkeycar.parts.datastore import TubHandler
 from donkeycar.utils import *
 
-def drive(cfg, model_path=None):
+def drive( cfg, model_path=None, meta=[] ):
 
     model_type = cfg.DEFAULT_MODEL_TYPE
     
     #Initialize car
     V = dk.vehicle.Vehicle()
 
-        
     if cfg.RS_PATH_PLANNER:
         from donkeycar.parts.realsense2 import RS_T265
         print("RS t265 with path tracking")
@@ -44,8 +44,20 @@ def drive(cfg, model_path=None):
         raise Exception("This script is for RS_PATH_PLANNER only")
 
     from donkeycar.parts.realsense2 import RS_D435i
-    cam = RS_D435i(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, frame_rate=15, img_type='depth')
+    cam = RS_D435i(img_type='depth')
     V.add(cam,outputs=['cam/image_array'], threaded=True)
+
+    # class Distance:
+    #     def run(self, img):
+    #         h,w = img.shape
+    #         arr = img[50:w-50,0:h-60].flatten()
+
+    #         mean = np.mean(arr)
+
+    #         print(mean)
+
+    # V.add(Distance(),
+    #     inputs=['cam/image_array'], outputs=['null'])
     
     ctr = get_js_controller(cfg)
     V.add(ctr, 
@@ -53,14 +65,14 @@ def drive(cfg, model_path=None):
           outputs=['user/angle', 'user/throttle', 'user/mode', 'recording'],
           threaded=True)
     #this throttle filter will allow one tap back for esc reverse
-    V.add(ThrottleFilter(), inputs=['user/throttle'], outputs=['user/throttle'])
+    # V.add(ThrottleFilter(), inputs=['user/throttle'], outputs=['user/throttle'])
 
     #This web controller will create a web server
     web_ctr = LocalWebControllerPlanner()
 
     V.add(web_ctr,
           inputs=['map/image', 'cam/image_array'],
-          outputs=['web/angle', 'web/throttle', 'web/mode', 'web/recording'],
+          outputs=['null'], # no part consumes this
           threaded=True)
         
     class UserCondition:
@@ -100,24 +112,25 @@ def drive(cfg, model_path=None):
     plot = PathPlot(scale=cfg.PATH_SCALE, offset=(cfg.IMAGE_W/2,cfg.IMAGE_H/2), color=(0,0,255))
     V.add(plot, inputs=['map/image', 'path'], outputs=['map/image'], run_condition='run_user')
 
+    # this is error function for PID control
     V.add(CTE2(), inputs=['path', 'pos/x', 'pos/y'], outputs=['cte/error'], run_condition='run_pilot')
 
     pid = PIDController(p=cfg.PID_P, i=cfg.PID_I, d=cfg.PID_D)
     pilot = PID_Pilot(pid, cfg.PID_THROTTLE)
     V.add(pilot, inputs=['cte/error'], outputs=['pilot/angle', 'pilot/throttle'], run_condition="run_pilot")
 
-    def dec_pid_d():
-        pid.Kd -= 0.5
-        print("pid: d- %f" % pid.Kd)
+    def dec_pid_p():
+        pid.Kp -= 0.5
+        print("pid: p- %f" % pid.Kp)
 
-    def inc_pid_d():
-        pid.Kd += 0.5
-        print("pid: d+ %f" % pid.Kd)
+    def inc_pid_p():
+        pid.Kp += 0.5
+        print("pid: p+ %f" % pid.Kp)
 
-    ctr.set_button_down_trigger("left_shoulder", dec_pid_d)
-    ctr.set_button_down_trigger("right_shoulder", inc_pid_d)
+    ctr.set_button_down_trigger("left_shoulder", dec_pid_p)
+    ctr.set_button_down_trigger("right_shoulder", inc_pid_p)
 
-    pos_plot = PlotPose(scale=cfg.PATH_SCALE, offset=(cfg.IMAGE_W/2,cfg.IMAGE_H/2))
+    pos_plot = PlotPose(scale=cfg.PATH_SCALE, offset=(cfg.IMAGE_W//4,cfg.IMAGE_H//2))
     V.add(pos_plot, inputs=['map/image', 'pos/x', 'pos/y', 'pos/yaw'], outputs=['map/image'])
 
     if model_path:
@@ -158,17 +171,6 @@ def drive(cfg, model_path=None):
                   'pilot/angle', 'pilot/throttle'], 
           outputs=['angle', 'throttle'])
 
-    
-    #to give the car a boost when starting ai mode in a race.
-    aiLauncher = AiLaunch(cfg.AI_LAUNCH_DURATION, cfg.AI_LAUNCH_THROTTLE, cfg.AI_LAUNCH_KEEP_ENABLED)
-    
-    V.add(aiLauncher,
-        inputs=['user/mode', 'throttle'],
-        outputs=['throttle'])
-
-    if isinstance(ctr, JoystickController):
-        ctr.set_button_down_trigger(cfg.AI_LAUNCH_ENABLE_BUTTON, aiLauncher.enable_ai_launch)
-
     from donkeycar.parts.actuator import PCA9685, PWMSteering, PWMThrottle
 
     steering_controller = PCA9685(cfg.STEERING_CHANNEL, cfg.PCA9685_I2C_ADDR, busnum=cfg.PCA9685_I2C_BUSNUM)
@@ -185,6 +187,59 @@ def drive(cfg, model_path=None):
     V.add(steering, inputs=['angle'])
     V.add(throttle, inputs=['throttle'])
 
+    # data collection
+    inputs=['cam/image_array',
+            'user/angle', 'user/throttle', 
+            'user/mode']
+
+    types=['image_array',
+           'float', 'float',
+           'str']
+    
+    def get_record_alert_color(num_records):
+        col = (0, 0, 0)
+        for count, color in cfg.RECORD_ALERT_COLOR_ARR:
+            if num_records >= count:
+                col = color
+        return col    
+
+    class RecordTracker:
+        def __init__(self):
+            self.last_num_rec_print = 0
+            self.dur_alert = 0
+            self.force_alert = 0
+
+        def run(self, num_records):
+            if num_records is None:
+                return 0
+            
+            if self.last_num_rec_print != num_records or self.force_alert:
+                self.last_num_rec_print = num_records
+
+                if num_records % 10 == 0:
+                    print("recorded", num_records, "records")
+                        
+                if num_records % cfg.REC_COUNT_ALERT == 0 or self.force_alert:
+                    self.dur_alert = num_records // cfg.REC_COUNT_ALERT * cfg.REC_COUNT_ALERT_CYC
+                    self.force_alert = 0
+                    
+            if self.dur_alert > 0:
+                self.dur_alert -= 1
+
+            if self.dur_alert != 0:
+                return get_record_alert_color(num_records)
+
+            return 0
+
+    V.add(RecordTracker(), inputs=["tub/num_records"], outputs=['records/alert'])
+
+    th = TubHandler(path=cfg.DATA_PATH)
+    tub = th.new_tub_writer(inputs=inputs, types=types, user_meta=meta)
+
+    V.add(tub, inputs=inputs, outputs=["tub/num_records"], run_condition='recording')
+    #tell the controller about the tub        
+    ctr.set_tub(tub)
+    
     ctr.print_controls()
     #run the vehicle
     V.start(rate_hz=cfg.DRIVE_LOOP_HZ, max_loop_count=cfg.MAX_LOOPS)
