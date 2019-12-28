@@ -3,7 +3,7 @@
 Scripts to drive a donkey 2 car
 
 Usage:
-    manage.py (drive) [--model=<model>]
+    pathplanner.py (drive) [--model=<model>]
 
 
 Options:
@@ -37,15 +37,15 @@ def drive( cfg, model_path=None, meta=[] ):
     if cfg.RS_PATH_PLANNER:
         from donkeycar.parts.realsense2 import RS_T265
         print("RS t265 with path tracking")
-        odometry = RS_T265(path=True,stereo=False, image_output=False)
-        V.add(odometry,outputs=['rs/pos', 'rs/yaw'], threaded=True)
-        V.add(PosStream(), inputs=['rs/pos', 'rs/yaw'], outputs=['pos/x', 'pos/y', 'pos/yaw'])
+        odometry = RS_T265(path_output=True,stereo_output=False, image_output=False)
+        V.add(odometry,outputs=['rs/trans', 'rs/yaw'], threaded=True)
+        V.add(PosStream(), inputs=['rs/trans', 'rs/yaw'], outputs=['pos/x', 'pos/y', 'pos/yaw'])
     else:
         raise Exception("This script is for RS_PATH_PLANNER only")
 
     from donkeycar.parts.realsense2 import RS_D435i
-    cam = RS_D435i(img_type='depth')
-    V.add(cam,outputs=['cam/image_array'], threaded=True)
+    cam = RS_D435i(img_type=cfg.RS_IMG_TYPE, image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, frame_rate=cfg.RS_FRAME_RATE)
+    V.add(cam, inputs=[], outputs=['cam/image_array'], threaded=True)
 
     # class Distance:
     #     def run(self, img):
@@ -64,8 +64,6 @@ def drive( cfg, model_path=None, meta=[] ):
           inputs=['null'],
           outputs=['user/angle', 'user/throttle', 'user/mode', 'recording'],
           threaded=True)
-    #this throttle filter will allow one tap back for esc reverse
-    # V.add(ThrottleFilter(), inputs=['user/throttle'], outputs=['user/throttle'])
 
     #This web controller will create a web server
     web_ctr = LocalWebControllerPlanner()
@@ -104,12 +102,17 @@ def drive( cfg, model_path=None, meta=[] ):
         path.save(cfg.PATH_FILENAME)
         print("saved path:", cfg.PATH_FILENAME)
 
+    def clear_path():
+        path.clear()
+        print("path cleared, ready to record new path")
+
     ctr.set_button_down_trigger(cfg.SAVE_PATH_BTN, save_path)
+    ctr.set_button_down_trigger(cfg.CLEAR_PATH_BTN, clear_path)
 
     img = PImage(resolution=(cfg.IMAGE_W, cfg.IMAGE_H), clear_each_frame=True)
     V.add(img, outputs=['map/image'])
 
-    plot = PathPlot(scale=cfg.PATH_SCALE, offset=(cfg.IMAGE_W/2,cfg.IMAGE_H/2), color=(0,0,255))
+    plot = PathPlot(scale=cfg.PATH_SCALE, offset=(cfg.IMAGE_W//4,cfg.IMAGE_H//2), color=(0,0,255))
     V.add(plot, inputs=['map/image', 'path'], outputs=['map/image'], run_condition='run_user')
 
     # this is error function for PID control

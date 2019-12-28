@@ -59,7 +59,7 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
     if addCam:
         if camera_type == "stereo":
             from donkeycar.parts.realsense2 import RS_T265
-            cam = RS_T265(stereo=True, imu_output=cfg.USE_RS_IMU) 
+            cam = RS_T265(stereo_output=True, imu_output=cfg.USE_RS_IMU) 
 
             if cfg.USE_RS_IMU:
                 V.add(cam, outputs=['cam/image_array_a', 'cam/image_array_b', 'imu/acl_x', 'imu/acl_y', 'imu/acl_z', 'imu/gyr_x', 'imu/gyr_y', 'imu/gyr_z'], threaded=True)
@@ -107,14 +107,14 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
         
                 if cfg.RS_PATH_FOLLOWING:
                     print("RS t265 with path tracking")
-                    cam = RS_T265(path=True,stereo=False)
+                    cam = RS_T265(path_output=True,stereo_output=False)
                 else:
                     cam = RS_T265()
 
             elif cfg.CAMERA_TYPE == "RS_D435i":
                 from donkeycar.parts.realsense2 import RS_D435i
                 try:
-                    cam = RS_D435i(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, img_type=cfg.RS_IMG_TYPE, frame_rate=cfg.RS_FRAME_RATE)
+                    cam = RS_D435i()
                 except:
                     raise(Exception("Tried to use image_w: ", cfg.IMAGE_W, " image_h: ", cfg.IMAGE_H, "img_type: ", 
                     cfg.RS_IMG_TYPE, "frame_rate: ", cfg.RS_FRAME_RATE, "to start RS_D435i camera, but failed"))

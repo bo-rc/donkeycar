@@ -8,24 +8,26 @@
 # The update operation will not touch this file.
 # """
 
+DRIVE_LOOP_HZ = 15
+
 # #CAMERA
-#CAMERA_TYPE = "CSIC"   # (PICAM|WEBCAM|CVCAM|CSIC|V4L|MOCK)
-#IMAGE_W = 224
-#IMAGE_H = 224
+CAMERA_TYPE = "CSIC"   # (PICAM|WEBCAM|CVCAM|CSIC|V4L|MOCK)
+IMAGE_W = 224
+IMAGE_H = 224
+CAMERA_FRAMERATE = DRIVE_LOOP_HZ
 
 # #RealSense CAMERA
-#DRIVE_LOOP_HZ = 15
-CAMERA_TYPE = "RS_D435i"   # (RS_D435i|RS_T265|RS_T265_StereoRectified|PICAM|WEBCAM|CVCAM|CSIC|V4L|MOCK)
+#CAMERA_TYPE = "RS_D435i"   # (RS_D435i|RS_T265|RS_T265_StereoRectified|PICAM|WEBCAM|CVCAM|CSIC|V4L|MOCK)
 #IMAGE_W = 320
 #IMAGE_H = 240
 #RS_FOV=120 
 #RS_FRAME_RATE = DRIVE_LOOP_HZ
 #RS_IMG_TYPE = "color"
 #USE_RS_IMU = False
-RS_PATH_FOLLOWING = True
 SAVE_PATH_BTN = 'y_button'         # joystick button to save path
+CLEAR_PATH_BTN = 'options'
 PATH_MIN_DIST = 0.3                # after travelling this distance (m), save a path point
-PATH_SCALE = 25
+PATH_SCALE = 20
 PID_P = -5.0                       # proportional mult for PID path follower
 PID_I = 2.500                       # integral mult for PID path follower
 PID_D = -0.2                        # differential mult for PID path follower
@@ -51,4 +53,3 @@ CONTROLLER_TYPE='xbox'               #(ps3|ps4|xbox|nimbus|wiiu|F710|rc3)# impor
 AUTO_RECORD_ON_THROTTLE = False      #if true, we will record whenever throttle is not zero. 
                                      #if false, you must manually toggle recording with button b on xbox ctrl.
 
-LIDAR_SAFE_PORT = ''

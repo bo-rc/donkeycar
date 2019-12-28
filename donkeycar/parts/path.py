@@ -34,6 +34,10 @@ class Path(object):
         infile = open(filename, 'rb')
         self.path = pickle.load(infile)
         self.recording = False
+    
+    def clear(self):
+        self.path = []
+        self.recording = True
 
 class PImage(object):
     def __init__(self, resolution=(500, 500), color="white", clear_each_frame=False):
@@ -80,12 +84,12 @@ class PathPlot(object):
         self.offset = offset
         self.color = color
 
-    def plot_line(self, sx, sy, ex, ey, draw, color):
+    def plot_line(self, sx, sy, ex, ey, draw, color, width=1):
         '''
         scale dist so that max_dist is edge of img (mm)
         and img is PIL Image, draw the line using the draw ImageDraw object
         '''
-        draw.line((sx,sy, ex, ey), fill=color, width=1)
+        draw.line((sx,sy, ex, ey), fill=color, width=width)
 
     def run(self, img, path):
         
@@ -145,11 +149,13 @@ class PlotPose(object):
     '''
     draw an arrow plot to an image
     '''
-    def __init__(self,  scale=1.0, offset=(0., 0.), radius=4, color = (0, 255, 0)):
+    def __init__(self,  scale=1.0, offset=(0., 0.), radius=8, color = (0, 255, 0)):
         self.scale = scale
         self.offset = offset
         self.radius = radius
         self.color = color
+        self.origin_draw = True
+        self.origin = offset
 
     def plot_pose(self, x, y, rad, yaw, draw, color, width=1):
         '''
@@ -157,15 +163,19 @@ class PlotPose(object):
         and img is PIL Image, draw the circle using the draw ImageDraw object
         '''
 
+        if self.origin_draw:
+            draw.line((self.origin[0], self.origin[1], self.origin[0] + self.scale, self.origin[1]), fill=(255,0,0), width=1)
+            draw.line((self.origin[0], self.origin[1], self.origin[0], self.origin[1] - self.scale), fill=(0,255,0), width=2)
+
         sx = x - rad
         sy = y - rad
         ex = x + rad
         ey = y + rad
 
-        draw.ellipse([(sx, sy), (ex, ey)], fill=color)
+        draw.ellipse([(sx, sy), (ex, ey)], fill=(0,255,0), width=3)
         dx = self.radius * 3. * math.cos(math.radians(yaw))
         dy = self.radius * 3. * math.sin(math.radians(yaw))
-        draw.line([(x,y),(x+dx, y+dy)], fill=(0,0,255))
+        draw.line([(x,y),(x+dx, y+dy)], fill=(255,0,0), width=3)
 
 
     def run(self, img, x, y, yaw):
@@ -276,9 +286,12 @@ class PID_Pilot(object):
         return steer, self.throttle
 
 class PosStream:
-    def run(self, pos, yaw):
+    def run(self, trans, yaw):
         #RS_t265: y is up, x is right, z is backwards/forwards
-        return -pos.z, -pos.x, yaw
+        if trans is None:
+            return 0,0,0
+        else:
+            return -trans.z, -trans.x, yaw
 
 class gray2color:
 

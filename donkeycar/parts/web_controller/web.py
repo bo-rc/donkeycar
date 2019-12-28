@@ -175,7 +175,7 @@ class LocalWebControllerPlanner(tornado.web.Application):
         handlers = [
             (r"/", tornado.web.RedirectHandler, dict(url="/drive")),
             (r"/drive", DriveAPI),
-            (r"/video",VideoAPI),
+            (r"/video",VideoAPI_map),
             (r"/static/(.*)", tornado.web.StaticFileHandler, {"path": self.static_file_path}),
             ]
 
@@ -224,7 +224,7 @@ class DriveAPI(tornado.web.RequestHandler):
         self.application.recording = data['recording']
 
 
-class VideoAPI(tornado.web.RequestHandler):
+class VideoAPI_map(tornado.web.RequestHandler):
     '''
     Serves a MJPEG of the images posted from the vehicle. 
     '''
@@ -239,6 +239,34 @@ class VideoAPI(tornado.web.RequestHandler):
             interval = .1
             if self.served_image_timestamp + interval < time.time():        
                 img = utils.arr_to_binary(np.vstack([self.application.img_arr, self.application.map_arr]))
+
+                self.write(my_boundary)
+                self.write("Content-type: image/jpeg\r\n")
+                self.write("Content-length: %s\r\n\r\n" % len(img)) 
+                self.write(img)
+                self.served_image_timestamp = time.time()
+                try:
+                    await self.flush()
+                except tornado.iostream.StreamClosedError:
+                    pass
+            else:
+                await tornado.gen.sleep(interval)
+
+class VideoAPI(tornado.web.RequestHandler):
+    '''
+    Serves a MJPEG of the images posted from the vehicle. 
+    '''
+    async def get(self):
+
+        self.set_header("Content-type", "multipart/x-mixed-replace;boundary=--boundarydonotcross")
+
+        self.served_image_timestamp = time.time()
+        my_boundary = "--boundarydonotcross\n"
+        while True:
+            
+            interval = .1
+            if self.served_image_timestamp + interval < time.time():        
+                img = utils.arr_to_binary(self.application.img_arr)
 
                 self.write(my_boundary)
                 self.write("Content-type: image/jpeg\r\n")
