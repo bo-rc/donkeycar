@@ -39,6 +39,52 @@ class Path(object):
         self.path = []
         self.recording = True
 
+from collections import deque as Deque
+class Route(object):
+    def __init__(self, min_dist = 1., num_path_tracking=15):
+        self.path = Deque(maxlen=num_path_tracking)
+        self.waypoints = []
+        self.min_dist = min_dist
+        self.x = math.inf
+        self.y = math.inf
+        self.lastx = 0
+        self.lasty = 0
+
+    def run(self, x, y):
+        self.x = x
+        self.y = y
+        d = dist(x, y, self.lastx, self.lasty)
+        if d > self.min_dist:
+            self.path.append((x, y))
+            self.lastx = x
+            self.lasty = y
+        
+        return self.path, self.waypoints
+
+    def save_route(self, filename):
+        outfile = open(filename, 'wb')
+        pickle.dump(self.waypoints, outfile)
+        print("saved route (waypoints) to file: ", filename)
+    
+    def save_waypoint(self):
+        self.waypoints.append({"idx" : len(self.waypoints), "position" : (self.x, self.y)})
+        print("saved waypoint")
+    
+    def load(self, filename):
+        infile = open(filename, 'rb')
+        self.waypoints = pickle.load(infile)
+        print("loaded waypoints from file: ", filename)
+    
+    def clear(self):
+        self.waypoints = []
+        print("cleared all waypoints.")
+
+    def update(self):
+        pass
+
+    def run_threaded(self, x, y):
+        return self.run(x, y)
+
 class PImage(object):
     def __init__(self, resolution=(500, 500), color="white", clear_each_frame=False):
         self.resolution = resolution
@@ -74,42 +120,76 @@ class OriginOffset(object):
         self.ox = -self.last_x
         self.oy = -self.last_y
 
-
 class PathPlot(object):
     '''
-    draw a path plot to an image
+    draw past path to an image
     '''
     def __init__(self, scale=1.0, offset=(0., 0.0), color=(255, 0, 0)):
         self.scale = scale
         self.offset = offset
         self.color = color
 
-    def plot_line(self, sx, sy, ex, ey, draw, color, width=1):
-        '''
-        scale dist so that max_dist is edge of img (mm)
-        and img is PIL Image, draw the line using the draw ImageDraw object
-        '''
-        draw.line((sx,sy, ex, ey), fill=color, width=width)
+    def plot_path(self, path, draw):
+        for iP in range(0, len(path)):
+            ax, ay = path[iP]
+            # flip y because on image y increases downwards
+            draw.point((ax * self.scale + self.offset[0],
+                      -ay * self.scale + self.offset[1]),
+                      fill=self.color)
 
     def run(self, img, path):
-        
         if type(img) is numpy.ndarray:
             stacked_img = numpy.stack((img,)*3, axis=-1)
             img = arr_to_img(stacked_img)
 
         draw = ImageDraw.Draw(img)
-        for iP in range(0, len(path) - 1):
-            ax, ay = path[iP]
-            bx, by = path[iP + 1]
-            # flip y because on image y increases downwards
-            self.plot_line(ax * self.scale + self.offset[0],
-                        -ay * self.scale + self.offset[1], 
-                        bx * self.scale + self.offset[0], 
-                        -by * self.scale + self.offset[1], 
-                        draw, 
-                        self.color)
+        self.plot_path(path, draw)
 
         return img
+
+    def update(self):
+        pass
+
+    def run_threaded(self, img, path):
+        return self.run(img, path)
+
+class WaypointPlot(object):
+    '''
+    draw way points to an image
+    '''
+    def __init__(self, scale=1.0, offset=(0., 0.0), color=(255, 0, 0)):
+        self.scale = scale
+        self.offset = offset
+        self.color = color
+
+    def plot_wp(self, wpt, draw, color, width=1):
+        sx = wpt['position'][0]
+        sy = wpt['position'][1]
+        idx = wpt['idx']
+        draw.rectangle((sx * self.scale + self.offset[0] - 0.25 * self.scale,
+                        -sy * self.scale + self.offset[1] - 0.25 * self.scale, 
+                        sx * self.scale + self.offset[0] + 0.25 * self.scale, 
+                        -sy * self.scale + self.offset[1] + 0.25 * self.scale), 
+                        outline=color, width=width)
+        draw.text((sx * self.scale + self.offset[0], -sy * self.scale + self.offset[1] - 0.25 * self.scale), 
+                    str(idx), color=color, fill=color)
+
+    def run(self, img, waypoints):
+        if type(img) is numpy.ndarray:
+            stacked_img = numpy.stack((img,)*3, axis=-1)
+            img = arr_to_img(stacked_img)
+
+        draw = ImageDraw.Draw(img)
+        for waypt in waypoints:
+            self.plot_wp(waypt, draw, color=self.color)
+
+        return img
+
+    def update(self):
+        pass
+
+    def run_threaded(self, img, waypoints):
+        return self.run(img, waypoints)
 
 
 class PlotCircle(object):
@@ -274,6 +354,86 @@ class CTE2(object):
             self.cte = err.mag() * sign
         return self.cte
 
+class Navigator(object):
+
+    def __init__(self, wpt_reach_tolerance=0.25):
+        self.pos = numpy.array([0.,0.])
+        self.wpts = []
+        self.target = {'idx': 0, 'pos': numpy.array([0., 0.]), 'distance': 0.}
+        self.wpt_reach_tolerance = wpt_reach_tolerance
+    
+    def _print_nav_info(self):
+        print("Navigation target: {}, distance: {:.2f} m".format(self.target['idx'], self.target['distance']))
+
+    def _increase_target(self):
+        self.target['idx'] += 1
+        self.target['idx'] = self.target['idx'] % len(self.wpts)
+
+        self.target['pos'] = self.wpts[self.target['idx']]['position']
+        self.target['distance'] = numpy.linalg.norm( self.pos - self.target['pos'])
+
+    def _decrease_target(self):
+        self.target['idx'] -= 1
+        if self.target['idx'] < 0:
+            self.target['idx'] = len(self.wpts) - 1
+        self.target['pos'] = self.wpts[self.target['idx']]['position']
+        self.target['distance'] = numpy.linalg.norm( self.pos - self.target['pos'])
+
+    def increase_target(self):
+        if len(self.wpts) > 0:
+            self._increase_target()
+            self._print_nav_info()
+        else:
+            print("cannot change waypoint target: no waypoints available")
+
+    def decrease_target(self):
+        if len(self.wpts) > 0:
+            self._decrease_target()
+            self._print_nav_info()
+        else:
+            print("cannot change waypoint target: no waypoints available")
+
+    def run(self, waypoints, x, y, yaw):
+        # update self and target
+        self.pos = numpy.array([x,y])
+        self.wpts= waypoints
+
+        if len(self.wpts) == 0:
+            self.target = {'idx': 0, 'pos': numpy.array([0., 0.]), 'distance': 0.}
+            return 0
+        else:
+            self.target['pos'] = (
+                                    waypoints[self.target['idx']]['position'][0], 
+                                    waypoints[self.target['idx']]['position'][1]
+            )
+            self.target['distance'] = numpy.linalg.norm( self.pos - self.target['pos'])
+
+            if self.target['distance'] < self.wpt_reach_tolerance:
+                print("waypoint ", self.target['idx'], "reached!")
+                self.increase_target()
+                return 0.
+
+            # compute error for PID control
+            dest_dir = Vec3(self.target['pos'][0] - self.pos[0], self.target['pos'][1] - self.pos[1], 0).normalized()
+            pose_dir = Vec3(math.cos(math.radians(yaw)), -math.sin(math.radians(yaw)), 0)
+            error = dest_dir.cross(pose_dir)
+
+            # print("error vector: ", error.x, error.y, error.z)
+            # print("yaw = ", yaw)
+            # print("pose_dir = ", pose_dir.x,pose_dir.y)
+            # print("dest vec = ",  dest_dir.x,dest_dir.y)
+
+            if error.z > 0.0 :
+                return error.mag()
+            else:
+                return -error.mag()
+    
+    def update(self):
+        pass
+
+    def run_threaded(self, waypoints, x, y, yaw):
+        return self.run(waypoints, x, y, yaw)
+
 class PID_Pilot(object):
 
     def __init__(self, pid, throttle):
@@ -282,7 +442,6 @@ class PID_Pilot(object):
 
     def run(self, cte):
         steer = self.pid.run(cte)
-        logging.info("CTE: %f steer: %f" % (cte, steer))
         return steer, self.throttle
 
 class PosStream:

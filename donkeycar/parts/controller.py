@@ -700,7 +700,6 @@ class JoystickController(object):
         '''
         self.dead_zone = val
 
-
     def print_controls(self):
         '''
         print the mapping of buttons and axis to functions

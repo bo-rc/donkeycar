@@ -191,7 +191,7 @@ class LocalWebControllerPlanner(tornado.web.Application):
         self.listen(self.port)
         tornado.ioloop.IOLoop.instance().start()
 
-    def run_threaded(self, map_arr=None, img_arr=None):
+    def run_threaded(self, map_arr=None, img_arr=None, mode='user', recording=False, throttle=0., angle=0.):
         self.map_arr = map_arr
         if len(img_arr.shape) > 2:
             self.img_arr = img_arr
@@ -199,7 +199,11 @@ class LocalWebControllerPlanner(tornado.web.Application):
             self.img_arr = cv2.cvtColor(img_arr, cv2.COLOR_GRAY2RGB)
         return self.angle, self.throttle, self.mode, self.recording
         
-    def run(self, map_arr=None, depth_arr=None):
+    def run(self, map_arr=None, depth_arr=None, mode='user', recording=False, throttle=0., angle=0.):
+        self.mode = mode
+        self.recording = recording
+        self.throttle = throttle
+        self.angle = angle
         return self.run_threaded(map_arr, depth_arr)
 
     def shutdown(self):
@@ -237,7 +241,7 @@ class VideoAPI_map(tornado.web.RequestHandler):
         while True:
             
             interval = .1
-            if self.served_image_timestamp + interval < time.time():        
+            if self.served_image_timestamp + interval < time.time():  
                 img = utils.arr_to_binary(np.vstack([self.application.img_arr, self.application.map_arr]))
 
                 self.write(my_boundary)
