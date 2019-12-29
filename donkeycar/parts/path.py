@@ -410,8 +410,7 @@ class Navigator(object):
 
             if self.target['distance'] < self.wpt_reach_tolerance:
                 print("waypoint ", self.target['idx'], "reached! tolerance: ", self.wpt_reach_tolerance, " m.")
-                if len(self.wpts) > 1:
-                    self.increase_target()
+                self.increase_target()
                 return 0.
 
             # compute error for PID control
