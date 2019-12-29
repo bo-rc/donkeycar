@@ -44,7 +44,7 @@ def drive( cfg, model_path=None, meta=[] ):
         raise Exception("This script is for RS_PATH_PLANNER only")
 
     from donkeycar.parts.realsense2 import RS_D435i
-    cam = RS_D435i(img_type=cfg.RS_IMG_TYPE, image_w=cfg.D435_IMAGE_W, image_h=cfg.D435_IMAGE_H, frame_rate=cfg.D435_FRAME_RATE)
+    cam = RS_D435i(img_type=cfg.D435_IMG_TYPE, image_w=cfg.D435_IMAGE_W, image_h=cfg.D435_IMAGE_H, frame_rate=cfg.D435_FRAME_RATE)
     V.add(cam, inputs=[], outputs=['cam/image_array'], threaded=True)
 
     # class Distance:
@@ -127,7 +127,7 @@ def drive( cfg, model_path=None, meta=[] ):
 
     # this is error function for PID control
     nav = Navigator(wpt_reach_tolerance=cfg.WPT_TOLERANCE)
-    V.add(nav, inputs=['waypoints', 'pos/x', 'pos/y', 'pos/yaw'], outputs=['cte/error'], threaded=False)
+    V.add(nav, inputs=['waypoints', 'pos/x', 'pos/y', 'pos/yaw'], outputs=['cte/error'], threaded=False, run_condition="run_pilot")
 
     ctr.set_button_down_trigger("left_shoulder", nav.decrease_target)
     ctr.set_button_down_trigger("right_shoulder", nav.increase_target)

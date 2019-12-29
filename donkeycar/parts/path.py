@@ -409,7 +409,7 @@ class Navigator(object):
             self.target['distance'] = numpy.linalg.norm( self.pos - self.target['pos'])
 
             if self.target['distance'] < self.wpt_reach_tolerance:
-                print("waypoint ", self.target['idx'], "reached!")
+                print("waypoint ", self.target['idx'], "reached! tolerance: ", self.wpt_reach_tolerance, " m.")
                 self.increase_target()
                 return 0.
 
@@ -442,6 +442,7 @@ class PID_Pilot(object):
 
     def run(self, cte):
         steer = self.pid.run(cte)
+        #logging.info("CTE: %f steer: %f" % (cte, steer))
         return steer, self.throttle
 
 class PosStream:
