@@ -700,6 +700,7 @@ class JoystickController(object):
         '''
         self.dead_zone = val
 
+
     def print_controls(self):
         '''
         print the mapping of buttons and axis to functions
@@ -1127,7 +1128,7 @@ class XboxOneJoystickController(JoystickController):
 
         self.axis_trigger_map = {
             'left_stick_horz': self.set_steering,
-            'left_stick_vert': self.set_throttle,
+            'right_stick_vert': self.set_throttle,
             # Forza Mode
             'right_trigger': self.magnitude(),
             'left_trigger': self.magnitude(reversed = True),

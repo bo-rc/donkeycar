@@ -22,24 +22,45 @@ MODELS_PATH = os.path.join(CAR_PATH, 'models')
 
 #VEHICLE
 DRIVE_LOOP_HZ = 15      # the vehicle loop will pause if faster than this speed.
+CAMERA_FRAMERATE = DRIVE_LOOP_HZ
 MAX_LOOPS = None        # the vehicle loop can abort after this many iterations, when given a positive integer.
 
 #CAMERA
 CAMERA_TYPE = "CSIC"   # (PICAM|WEBCAM|CVCAM|CSIC|V4L|MOCK|RS_D435i|RS_T265|RS_T265_StereoRectified)
-IMAGE_W = 160
-IMAGE_H = 120
-IMAGE_DEPTH = 3         # default RGB=3, make 1 for mono
-CAMERA_FRAMERATE = DRIVE_LOOP_HZ
+CSIC_IMAGE_W = 224
+CSIC_IMAGE_H = 224
 # For CSIC camera - If the camera is mounted in a rotated position, changing the below parameter will correct the output frame orientation
 CSIC_CAM_GSTREAMER_FLIP_PARM = 0 # (0 => none , 4 => Flip horizontally, 6 => Flip vertically)
+
+IMAGE_W = 224
+IMAGE_H = 224
+IMAGE_DEPTH = 3         # default RGB=3, make 1 for mono
+
 # For realsense cameras
 RS_IMG_TYPE = "color" # (color|depth)
 USE_RS_IMU = False
 RS_FOV = 120
+T265_IMAGE_W = 240
+￼T265_IMAGE_H = 140
+￼T265_FOV=120 
+
+#USE_RS_IMU = False
+￼SAVE_ROUTE_BTN = 'y_button'        # joystick button to save path
+￼SAVE_WPT_BTN = 'x_button'
+￼RS_PATH_PLANNER = True
+￼RS_ROUTE_FILE = 'rs_route.pkl'
+￼CLEAR_ROUTE_BTN = 'options'
+￼PATH_MIN_DIST = 0.3                # after travelling this distance (m), save a path point
+￼PATH_SCALE = 20
+￼PID_P = -2.5                       # proportional mult for PID path follower
+￼PID_I = 0.0                        # integral mult for PID path follower
+￼PID_D = 0.0                        # differential mult for PID path follower
+￼PID_THROTTLE = 0.3                 # constant throttle value during path following
+￼WPT_TOLERANCE = 0.25
 
 #9865, over rides only if needed, ie. TX2..
 PCA9685_I2C_ADDR = 0x40     #I2C address, use i2cdetect to validate this number
-PCA9685_I2C_BUSNUM = None   #None will auto detect, which is fine on the pi. But other platforms should specify the bus num.
+PCA9685_I2C_BUSNUM = 1   #None will auto detect, which is fine on the pi. But other platforms should specify the bus num.
 
 #DRIVETRAIN
 #These options specify which chasis and motor setup you are using. Most are using SERVO_ESC.

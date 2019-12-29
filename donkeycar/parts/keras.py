@@ -168,38 +168,6 @@ class KerasLinear(KerasPilot):
         throttle = outputs[1]
         return steering[0][0], throttle[0][0]
 
-class KerasMotion(KerasPilot):
-    '''
-    A Keras part that take an image and Motion vector as input,
-    outputs steering and throttle
-
-    Note: When training, you will need to vectorize the input from the Motion.
-    Depending on the names you use for imu records, something like this will work:
-
-    X_keys = ['cam/image_array','motion_array']
-    y_keys = ['user/angle', 'user/throttle']
-
-    '''
-    def __init__(self, model=None, num_outputs=2, num_motion_inputs=9, input_shape=(120, 160, 3), *args, **kwargs):
-        super(KerasMotion, self).__init__(*args, **kwargs)
-        self.num_motion_inputs = num_motion_inputs
-        self.model = default_imu(num_outputs = num_outputs, num_imu_inputs = num_motion_inputs, input_shape=input_shape)
-        self.compile()
-
-    def compile(self):
-        self.model.compile(optimizer=self.optimizer,
-                  loss='mse')
-        
-    # self.pos.x, self.pos.y, self.pos.z, self.vel.x, self.vel.y, self.vel.z, 
-    # self.acc.x, self.acc.y, self.acc.z, self.rot[0], self.rot[1], self.rot[2]
-    def run(self, img_arr, vel_x, vel_y, vel_z, acl_x, acl_y, acl_z, gyr_x, gyr_y, gyr_z):
-        #TODO: would be nice to take a vector input array.
-        img_arr = img_arr.reshape((1,) + img_arr.shape)
-        motion_arr = np.array([vel_x, vel_y, vel_z, acl_x, acl_y, acl_z, gyr_x, gyr_y, gyr_z]).reshape(1,self.num_motion_inputs)
-        outputs = self.model.predict([img_arr, motion_arr])
-        steering = outputs[0]
-        throttle = outputs[1]
-        return steering[0][0], throttle[0][0]
 
 
 class KerasIMU(KerasPilot):

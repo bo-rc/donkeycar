@@ -29,8 +29,6 @@ from donkeycar.parts.throttle_filter import ThrottleFilter
 from donkeycar.parts.behavior import BehaviorPart
 from donkeycar.parts.file_watcher import FileWatcher
 from donkeycar.parts.launch import AiLaunch
-from donkeycar.parts.path import Path, PathPlot, CTE, CTE2, PID_Pilot, PlotPose, PImage, OriginOffset, PosStream
-from donkeycar.parts.transform import PIDController
 from donkeycar.utils import *
 
 def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type='single', meta=[] ):
@@ -44,6 +42,11 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
     to parts requesting the same named input.
     '''
 
+    if cfg.DONKEY_GYM:
+        #the simulator will use cuda and then we usually run out of resources
+        #if we also try to use cuda. so disable for donkey_gym.
+        os.environ["CUDA_VISIBLE_DEVICES"]="-1" 
+
     if model_type is None:
         if cfg.TRAIN_LOCALIZER:
             model_type = "localizer"
@@ -55,179 +58,104 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
     #Initialize car
     V = dk.vehicle.Vehicle()
 
-    addCam = True
-    if addCam:
-        if camera_type == "stereo":
-            from donkeycar.parts.realsense2 import RS_T265
-            cam = RS_T265(stereo_output=True, imu_output=cfg.USE_RS_IMU) 
+    if camera_type == "stereo":
 
-            if cfg.USE_RS_IMU:
-                V.add(cam, outputs=['cam/image_array_a', 'cam/image_array_b', 'imu/acl_x', 'imu/acl_y', 'imu/acl_z', 'imu/gyr_x', 'imu/gyr_y', 'imu/gyr_z'], threaded=True)
-            else:
-                V.add(cam, outputs=['cam/image_array_a', 'cam/image_array_b'], threaded=True)
+        if cfg.CAMERA_TYPE == "WEBCAM":
+            from donkeycar.parts.camera import Webcam            
 
-            from donkeycar.parts.image import StereoPair
+            camA = Webcam(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH, iCam = 0)
+            camB = Webcam(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH, iCam = 1)
 
-            V.add(StereoPair(), inputs=['cam/image_array_a', 'cam/image_array_b'], 
-                outputs=['cam/image_array'])
+        elif cfg.CAMERA_TYPE == "CVCAM":
+            from donkeycar.parts.cv import CvCam
 
+            camA = CvCam(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH, iCam = 0)
+            camB = CvCam(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH, iCam = 1)
         else:
-            print("cfg.CAMERA_TYPE", cfg.CAMERA_TYPE)
-            if cfg.DONKEY_GYM:
-                from donkeycar.parts.dgym import DonkeyGymEnv 
-            
-            inputs = []
+            raise(Exception("Unsupported camera type: %s" % cfg.CAMERA_TYPE))
+
+        V.add(camA, outputs=['cam/image_array_a'], threaded=True)
+        V.add(camB, outputs=['cam/image_array_b'], threaded=True)
+
+        from donkeycar.parts.image import StereoPair
+
+        V.add(StereoPair(), inputs=['cam/image_array_a', 'cam/image_array_b'], 
+            outputs=['cam/image_array'])
+
+    else:
+        print("cfg.CAMERA_TYPE", cfg.CAMERA_TYPE)
+        if cfg.DONKEY_GYM:
+            from donkeycar.parts.dgym import DonkeyGymEnv 
+        
+        inputs = []
+        threaded = True
+        print("cfg.CAMERA_TYPE", cfg.CAMERA_TYPE)
+        if cfg.DONKEY_GYM:
+            from donkeycar.parts.dgym import DonkeyGymEnv 
+            cam = DonkeyGymEnv(cfg.DONKEY_SIM_PATH, env_name=cfg.DONKEY_GYM_ENV_NAME)
             threaded = True
-
-            if cfg.DONKEY_GYM:
-                from donkeycar.parts.dgym import DonkeyGymEnv 
-                cam = DonkeyGymEnv(cfg.DONKEY_SIM_PATH, env_name=cfg.DONKEY_GYM_ENV_NAME)
-                threaded = True
-                inputs = ['angle', 'throttle']
-            elif cfg.CAMERA_TYPE == "PICAM":
-                from donkeycar.parts.camera import PiCamera
-                cam = PiCamera(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH)
-            elif cfg.CAMERA_TYPE == "WEBCAM":
-                from donkeycar.parts.camera import Webcam
-                cam = Webcam(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH)
-            elif cfg.CAMERA_TYPE == "CVCAM":
-                from donkeycar.parts.cv import CvCam
-                cam = CvCam(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH)
-            elif cfg.CAMERA_TYPE == "CSIC":
-                from donkeycar.parts.camera import CSICamera
-                cam = CSICamera(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH, framerate=cfg.CAMERA_FRAMERATE, gstreamer_flip=cfg.CSIC_CAM_GSTREAMER_FLIP_PARM)
-            elif cfg.CAMERA_TYPE == "V4L":
-                from donkeycar.parts.camera import V4LCamera
-                cam = V4LCamera(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH, framerate=cfg.CAMERA_FRAMERATE)
-            elif cfg.CAMERA_TYPE == "MOCK":
-                from donkeycar.parts.camera import MockCamera
-                cam = MockCamera(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH)
-            elif cfg.CAMERA_TYPE == "RS_T265":
-                from donkeycar.parts.realsense2 import RS_T265
-        
-                if cfg.RS_PATH_FOLLOWING:
-                    print("RS t265 with path tracking")
-                    cam = RS_T265(path_output=True,stereo_output=False)
-                else:
-                    cam = RS_T265()
-
-            elif cfg.CAMERA_TYPE == "RS_D435i":
-                from donkeycar.parts.realsense2 import RS_D435i
-                try:
-                    cam = RS_D435i()
-                except:
-                    raise(Exception("Tried to use image_w: ", cfg.IMAGE_W, " image_h: ", cfg.IMAGE_H, "img_type: ", 
-                    cfg.RS_IMG_TYPE, "frame_rate: ", cfg.RS_FRAME_RATE, "to start RS_D435i camera, but failed"))
-
-            elif cfg.CAMERA_TYPE == "RS_T265_StereoRectified":
-                from donkeycar.parts.realsense2 import RS_T265_StereoRectified
-
-                try:
-                    cam = RS_T265_StereoRectified(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, fov=cfg.RS_FOV)
-                    print("Stereo-rectified pair of grey-scale images packed as a 3-ch (L,R,Disparity) image:")
-                except:
-                    raise(Exception("Tried to use image_w: ", cfg.IMAGE_W, " image_h: ", cfg.IMAGE_H, "fov: ", 
-                    cfg.RS_FOV, "to start RS_t265 camera, but failed"))
-
-            else:
-                raise(Exception("Unkown camera type: %s" % cfg.CAMERA_TYPE))
-                
-            if cfg.RS_PATH_FOLLOWING:
-                V.add(cam,outputs=['rs/pos', 'rs/yaw', 'rs/vel', 'rs/acc' , 'cam/image_array'], threaded=True)
-            else:
-                V.add(cam, inputs=inputs, outputs=['cam/image_array'], threaded=threaded)
-        
-    addCtrl = True
-    if addCtrl:
-        if use_joystick or cfg.USE_JOYSTICK_AS_DEFAULT or cfg.RS_PATH_FOLLOWING:
-            from donkeycar.parts.controller import get_js_controller
+            inputs = ['angle', 'throttle']
+        elif cfg.CAMERA_TYPE == "PICAM":
+            from donkeycar.parts.camera import PiCamera
+            cam = PiCamera(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH)
+        elif cfg.CAMERA_TYPE == "WEBCAM":
+            from donkeycar.parts.camera import Webcam
+            cam = Webcam(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH)
+        elif cfg.CAMERA_TYPE == "CVCAM":
+            from donkeycar.parts.cv import CvCam
+            cam = CvCam(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH)
+        elif cfg.CAMERA_TYPE == "CSIC":
+            from donkeycar.parts.camera import CSICamera
+            cam = CSICamera(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH, framerate=cfg.CAMERA_FRAMERATE, gstreamer_flip=cfg.CSIC_CAM_GSTREAMER_FLIP_PARM)
+        elif cfg.CAMERA_TYPE == "V4L":
+            from donkeycar.parts.camera import V4LCamera
+            cam = V4LCamera(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH, framerate=cfg.CAMERA_FRAMERATE)
+        elif cfg.CAMERA_TYPE == "MOCK":
+            from donkeycar.parts.camera import MockCamera
+            cam = MockCamera(image_w=cfg.IMAGE_W, image_h=cfg.IMAGE_H, image_d=cfg.IMAGE_DEPTH)
+        else:
+            raise(Exception("Unkown camera type: %s" % cfg.CAMERA_TYPE))
             
-            ctr = get_js_controller(cfg)
-
-            #This web controller will create a web server
-            web_ctr = LocalWebController()
-            V.add(web_ctr,
-                inputs=['map/image'],
-                outputs=['web/angle', 'web/throttle', 'web/mode', 'web/recording'],
-                threaded=True)
-            
-            if cfg.USE_NETWORKED_JS:
-                from donkeycar.parts.controller import JoyStickSub
-                netwkJs = JoyStickSub(cfg.NETWORK_JS_SERVER_IP)
-                V.add(netwkJs, threaded=True)
-                ctr.js = netwkJs
-        else:        
-            # web controller
-            ctr = LocalWebController()
-
-        V.add(ctr, 
-            inputs=['null'],
-            outputs=['user/angle', 'user/throttle', 'user/mode', 'recording'],
-            threaded=True)
+        V.add(cam, inputs=inputs, outputs=['cam/image_array'], threaded=threaded)
         
-        #this throttle filter will allow one tap back for esc reverse
-        th_filter = ThrottleFilter()
-        V.add(th_filter, inputs=['user/throttle'], outputs=['user/throttle'])
-        class UserCondition:
-            def run(self, mode):
-                if mode == 'user':
-                    return True
-                else:
-                    return False
+    if use_joystick or cfg.USE_JOYSTICK_AS_DEFAULT:
+        #modify max_throttle closer to 1.0 to have more power
+        #modify steering_scale lower than 1.0 to have less responsive steering
+        from donkeycar.parts.controller import get_js_controller
+        
+        ctr = get_js_controller(cfg)
+        
+        if cfg.USE_NETWORKED_JS:
+            from donkeycar.parts.controller import JoyStickSub
+            netwkJs = JoyStickSub(cfg.NETWORK_JS_SERVER_IP)
+            V.add(netwkJs, threaded=True)
+            ctr.js = netwkJs
 
-        V.add(UserCondition(), inputs=['web/mode'], outputs=['run_user'])
+    else:        
+        #This web controller will create a web server that is capable
+        #of managing steering, throttle, and modes, and more.
+        ctr = LocalWebController()
+
     
-        class PilotCondition:
-            def run(self, mode):
-                if mode == 'user':
-                    return False
-                else:
-                    return True       
+    V.add(ctr, 
+          inputs=['cam/image_array'],
+          outputs=['user/angle', 'user/throttle', 'user/mode', 'recording'],
+          threaded=True)
 
-        V.add(PilotCondition(), inputs=['web/mode'], outputs=['run_pilot'])
+    #this throttle filter will allow one tap back for esc reverse
+    th_filter = ThrottleFilter()
+    V.add(th_filter, inputs=['user/throttle'], outputs=['user/throttle'])
+    
+    #See if we should even run the pilot module. 
+    #This is only needed because the part run_condition only accepts boolean
+    class PilotCondition:
+        def run(self, mode):
+            if mode == 'user':
+                return False
+            else:
+                return True       
 
-    if cfg.RS_PATH_FOLLOWING:
-        V.add(PosStream(), inputs=['rs/pos', 'rs/yaw'], outputs=['pos/x', 'pos/y', 'pos/yaw'])
-
-        path = Path(min_dist=cfg.PATH_MIN_DIST)
-        V.add(path, inputs=['pos/x', 'pos/y'], outputs=['path'], run_condition='run_user')
-
-        if os.path.exists(cfg.PATH_FILENAME):
-            path.load(cfg.PATH_FILENAME)
-            print("loaded path:", cfg.PATH_FILENAME)
-
-        def save_path():
-            path.save(cfg.PATH_FILENAME)
-            print("saved path:", cfg.PATH_FILENAME)
-
-        ctr.set_button_down_trigger(cfg.SAVE_PATH_BTN, save_path)
-
-        img = PImage(resolution=(cfg.MAP_RES, cfg.MAP_RES), clear_each_frame=True)
-        V.add(img, outputs=['map/image'])
-
-        plot = PathPlot(scale=cfg.PATH_SCALE, offset=cfg.PATH_OFFSET)
-        V.add(plot, inputs=['map/image', 'path'], outputs=['map/image'])
-
-        cte = CTE2()
-        V.add(cte, inputs=['path', 'pos/x', 'pos/y'], outputs=['cte/error'], run_condition='run_pilot')
-
-        pid = PIDController(p=cfg.PID_P, i=cfg.PID_I, d=cfg.PID_D)
-        pilot = PID_Pilot(pid, cfg.PID_THROTTLE)
-        V.add(pilot, inputs=['cte/error'], outputs=['pilot/angle', 'pilot/throttle'], run_condition="run_pilot")
-
-        def dec_pid_d():
-            pid.Kd -= 0.5
-            print("pid: d- %f" % pid.Kd)
-
-        def inc_pid_d():
-            pid.Kd += 0.5
-            print("pid: d+ %f" % pid.Kd)
-
-        ctr.set_button_down_trigger("left_shoulder", dec_pid_d)
-        ctr.set_button_down_trigger("right_shoulder", inc_pid_d)
-
-        pos_plot = PlotPose(scale=cfg.PATH_SCALE, offset=cfg.PATH_OFFSET)
-        V.add(pos_plot, inputs=['map/image', 'pos/x', 'pos/y', 'pos/yaw'], outputs=['map/image'])
+    V.add(PilotCondition(), inputs=['user/mode'], outputs=['run_pilot'])
     
     class LedConditionLogic:
         def __init__(self, cfg):
@@ -316,6 +244,13 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
     rec_tracker_part = RecordTracker()
     V.add(rec_tracker_part, inputs=["tub/num_records"], outputs=['records/alert'])
 
+    if cfg.AUTO_RECORD_ON_THROTTLE and isinstance(ctr, JoystickController):
+        #then we are not using the circle button. hijack that to force a record count indication
+        def show_record_acount_status():
+            rec_tracker_part.last_num_rec_print = 0
+            rec_tracker_part.force_alert = 1
+        ctr.set_button_down_trigger('circle', show_record_acount_status)
+
     #Sombrero
     if cfg.HAVE_SOMBRERO:
         from donkeycar.parts.sombrero import Sombrero
@@ -327,14 +262,6 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
         imu = Mpu6050()
         V.add(imu, outputs=['imu/acl_x', 'imu/acl_y', 'imu/acl_z',
             'imu/gyr_x', 'imu/gyr_y', 'imu/gyr_z'], threaded=True)
-    
-    if model_type == "motion":
-        from donkeycar.parts.realsense2 import RS_T265
-        motion = RS_T265(motion=True)
-        V.add(motion, outputs=[
-            'motion/vel_x', 'motion/vel_y', 'motion/vel_z',
-            'motion/acl_x', 'motion/acl_y', 'motion/acl_z',
-            'motion/gyr_x', 'motion/gyr_y', 'motion/gyr_z'])
 
     class ImgPreProcess():
         '''
@@ -368,20 +295,11 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
         inputs = [inf_input, "behavior/one_hot_state_array"]  
     #IMU
     elif model_type == "imu":
-        assert(cfg.HAVE_IMU or cfg.USE_RS_IMU)
+        assert(cfg.HAVE_IMU)
         #Run the pilot if the mode is not user.
         inputs=[inf_input,
             'imu/acl_x', 'imu/acl_y', 'imu/acl_z',
             'imu/gyr_x', 'imu/gyr_y', 'imu/gyr_z']
-    elif cfg.USE_RS_IMU:
-        inputs=[inf_input,
-            'imu/acl_x', 'imu/acl_y', 'imu/acl_z',
-            'imu/gyr_x', 'imu/gyr_y', 'imu/gyr_z']
-    elif model_type == "motion":
-        inputs = [inf_input,
-            'motion/vel_x', 'motion/vel_y', 'motion/vel_z',
-            'motion/acl_x', 'motion/acl_y', 'motion/acl_z',
-            'motion/gyr_x', 'motion/gyr_y', 'motion/gyr_z']
     else:
         inputs=[inf_input]
 
@@ -477,8 +395,6 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
                 return pilot_angle, user_throttle
             
             else: 
-                if pilot_throttle is None:
-                    pilot_throttle = 0
                 return pilot_angle, pilot_throttle * cfg.AI_THROTTLE_MULT
         
     V.add(DriveMode(), 
@@ -496,6 +412,7 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
 
     if isinstance(ctr, JoystickController):
         ctr.set_button_down_trigger(cfg.AI_LAUNCH_ENABLE_BUTTON, aiLauncher.enable_ai_launch)
+
 
     class AiRunCondition:
         '''
@@ -599,22 +516,11 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
         inputs += ['behavior/state', 'behavior/label', "behavior/one_hot_state_array"]
         types += ['int', 'str', 'vector']
     
-    if cfg.HAVE_IMU or cfg.USE_RS_IMU:
+    if cfg.HAVE_IMU:
         inputs += ['imu/acl_x', 'imu/acl_y', 'imu/acl_z',
             'imu/gyr_x', 'imu/gyr_y', 'imu/gyr_z']
 
         types +=['float', 'float', 'float',
-           'float', 'float', 'float']
-    
-    if model_type == "motion":
-        inputs += [
-            'motion/vel_x', 'motion/vel_y', 'motion/vel_z',
-            'motion/acl_x', 'motion/acl_y', 'motion/acl_z',
-            'motion/gyr_x', 'motion/gyr_y', 'motion/gyr_z']
-
-        types +=['float', 'float', 'float',
-           'float', 'float', 'float',
-           'float', 'float', 'float',
            'float', 'float', 'float']
 
     if cfg.RECORD_DURING_AI:
@@ -651,7 +557,8 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
         ctr.print_controls()
 
     #run the vehicle for 20 seconds
-    V.start(rate_hz=cfg.DRIVE_LOOP_HZ, max_loop_count=cfg.MAX_LOOPS)
+    V.start(rate_hz=cfg.DRIVE_LOOP_HZ, 
+            max_loop_count=cfg.MAX_LOOPS)
 
 
 if __name__ == '__main__':

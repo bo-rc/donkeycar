@@ -442,6 +442,7 @@ class PID_Pilot(object):
 
     def run(self, cte):
         steer = self.pid.run(cte)
+        #logging.info("CTE: %f steer: %f" % (cte, steer))
         return steer, self.throttle
 
 class PosStream:
