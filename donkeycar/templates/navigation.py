@@ -127,7 +127,7 @@ def drive( cfg, model_path=None, meta=[] ):
 
     # this is error function for PID control
     nav = Navigator(wpt_reach_tolerance=cfg.WPT_TOLERANCE)
-    V.add(nav, inputs=['waypoints', 'pos/x', 'pos/y', 'pos/yaw'], outputs=['cte/error'], threaded=False, run_condition="run_pilot")
+    V.add(nav, inputs=['waypoints', 'pos/x', 'pos/y', 'pos/yaw'], outputs=['cte/error'], threaded=True, run_condition="run_pilot")
 
     ctr.set_button_down_trigger("left_shoulder", nav.decrease_target)
     ctr.set_button_down_trigger("right_shoulder", nav.increase_target)
