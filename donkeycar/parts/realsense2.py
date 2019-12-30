@@ -59,30 +59,12 @@ class RS_T265_StereoRectified(object):
         cfg.enable_stream(rs.stream.fisheye, 1) # Left camera
         cfg.enable_stream(rs.stream.fisheye, 2) # Right camera
 
-        # Set up a mutex to share data between threads 
-        from threading import Lock
-        self.frame_mutex = Lock()
         self.frame_data = {"left"  : None,
-              "right" : None,
-              "timestamp_ms" : None
+              "right" : None
               }
 
-        def callback(frame):
-            if frame.is_frameset():
-                frameset = frame.as_frameset()
-                f1 = frameset.get_fisheye_frame(1).as_video_frame()
-                f2 = frameset.get_fisheye_frame(2).as_video_frame()
-                left_data = np.asanyarray(f1.get_data())
-                right_data = np.asanyarray(f2.get_data())
-                ts = frameset.get_timestamp()
-                self.frame_mutex.acquire()
-                self.frame_data["left"] = left_data
-                self.frame_data["right"] = right_data
-                self.frame_data["timestamp_ms"] = ts
-                self.frame_mutex.release()
-
         # Start streaming with our callback
-        self.pipe.start(cfg, callback)
+        self.pipe.start(cfg)
         time.sleep(0.5)
 
         profiles = self.pipe.get_active_profile()
@@ -176,63 +158,68 @@ class RS_T265_StereoRectified(object):
 
     def poll(self):
         try:
-            self.frame_mutex.acquire()
-            valid = self.frame_data["timestamp_ms"] is not None
-            self.frame_mutex.release()
+            frames = self.pipe.wait_for_frames()
         except Exception as e:
             logging.error(e)
             return
 
-        # If frames are ready to process
-        if valid:
-            # Hold the mutex only long enough to copy the stereo frames
-            self.frame_mutex.acquire()
-            frame_copy = {"left"  : self.frame_data["left"].copy(),
-                          "right" : self.frame_data["right"].copy()}
-            self.frame_mutex.release()
+        # Hold the mutex only long enough to copy the stereo frames
+        self.frame_data['left'] = np.asanyarray(frames.get_fisheye_frame(1).get_data())
+        self.frame_data['right'] = np.asanyarray(frames.get_fisheye_frame(2).get_data())
 
-            # Undistort and crop the center of the frames
-            center_undistorted = {"left" : cv2.remap(src = frame_copy["left"],
-                                          map1 = self.undistort_rectify["left"][0],
-                                          map2 = self.undistort_rectify["left"][1],
-                                          interpolation = cv2.INTER_LINEAR),
-                                  "right" : cv2.remap(src = frame_copy["right"],
-                                          map1 = self.undistort_rectify["right"][0],
-                                          map2 = self.undistort_rectify["right"][1],
-                                          interpolation = cv2.INTER_LINEAR)}
-            # compute the disparity on the center of the frames and convert it to a pixel disparity (divide by DISP_SCALE=16)
-            disparity = self.stereo.compute(center_undistorted["left"], center_undistorted["right"]).astype(np.float32) / 16.0
-            # re-crop just the valid part of the disparity
-            disparity = disparity[:,self.max_disp:]
-            # scale disparity to 0-255
-            disp_vis = 255*(disparity - self.min_disp)/ self.num_disp
+        # Undistort and crop the center of the frames
+        center_undistorted = {"left" : cv2.remap(src = self.frame_data["left"],
+                                        map1 = self.undistort_rectify["left"][0],
+                                        map2 = self.undistort_rectify["left"][1],
+                                        interpolation = cv2.INTER_LINEAR),
+                                "right" : cv2.remap(src = self.frame_data["right"],
+                                        map1 = self.undistort_rectify["right"][0],
+                                        map2 = self.undistort_rectify["right"][1],
+                                        interpolation = cv2.INTER_LINEAR)}
 
-            img_l = center_undistorted["left"][:,self.max_disp:]
-            img_r = center_undistorted["right"][:,self.max_disp:]
+        img_l = center_undistorted["left"][:,self.max_disp:]
+        img_r = center_undistorted["right"][:,self.max_disp:]
 
-            if img_l is not None and img_r is not None:
-                width, height = img_l.shape
-                grey_a = img_l[self.crop_height:height,0:width]
-                grey_b = img_r[self.crop_height:height,0:width]
-                grey_c = disp_vis[self.crop_height:height,0:width]
-                
-                stereo_image = np.zeros([height - self.crop_height, width, 3], dtype=np.dtype('B'))
-                stereo_image[...,0] = np.reshape(grey_a, (height - self.crop_height, width))
-                stereo_image[...,1] = np.reshape(grey_b, (height - self.crop_height, width))
-                stereo_image[...,2] = np.reshape(grey_c, (height - self.crop_height, width))
+        width, height = img_l.shape
+        self.img = np.zeros([height - self.crop_height, width, 3], dtype=np.dtype('B'))
+        self.img[...,0] = np.reshape(img_l[self.crop_height:height,0:width], (height - self.crop_height, width))
+        self.img[...,1] = np.reshape(img_r[self.crop_height:height,0:width], (height - self.crop_height, width))
+        self.img[...,2] = np.reshape(img_r[self.crop_height:height,0:width], (height - self.crop_height, width))
 
-                self.img = np.array(stereo_image)
+        # not enough resources on Jetson Nano to perform the following, commenting out ...
+        # # compute the disparity on the center of the frames and convert it to a pixel disparity (divide by DISP_SCALE=16)
+        # disparity = self.stereo.compute(center_undistorted["left"], center_undistorted["right"]).astype(np.float32) / 16.0
+        # # re-crop just the valid part of the disparity
+        # disparity = disparity[:,self.max_disp:]
+        # # scale disparity to 0-255
+        # disp_vis = 255*(disparity - self.min_disp)/ self.num_disp
+
+        # img_l = center_undistorted["left"][:,self.max_disp:]
+        # img_r = center_undistorted["right"][:,self.max_disp:]
+
+
+        # if img_l is not None and img_r is not None:
+        #     width, height = img_l.shape
+        #     grey_a = img_l[self.crop_height:height,0:width]
+        #     grey_b = img_r[self.crop_height:height,0:width]
+        #     grey_c = disp_vis[self.crop_height:height,0:width]
+            
+        #     stereo_image = np.zeros([height - self.crop_height, width, 3], dtype=np.dtype('B'))
+        #     stereo_image[...,0] = np.reshape(grey_a, (height - self.crop_height, width))
+        #     stereo_image[...,1] = np.reshape(grey_b, (height - self.crop_height, width))
+        #     stereo_image[...,2] = np.reshape(grey_c, (height - self.crop_height, width))
+
+        #     self.img = np.array(stereo_image)
 
 
     def update(self):
-        while self.running:
-            self.poll()
+        self.poll()
 
     def run_threaded(self):
+        self.poll()
         return self.img
 
     def run(self):
-        self.poll()
         return self.run_threaded()
 
     def shutdown(self):
