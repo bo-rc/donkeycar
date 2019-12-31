@@ -440,10 +440,13 @@ class PID_Pilot(object):
         self.pid = pid
         self.throttle = throttle
 
-    def run(self, cte):
-        steer = self.pid.run(cte)
-        #logging.info("CTE: %f steer: %f" % (cte, steer))
-        return steer, self.throttle
+    def run(self, cte, route):
+        if len(route) == 0:
+            return 0., 0.
+        else:
+            steer = self.pid.run(cte)
+            #logging.info("CTE: %f steer: %f" % (cte, steer))
+            return steer, self.throttle
 
 class PosStream:
     def run(self, trans, yaw):

@@ -134,7 +134,7 @@ def drive( cfg, model_path=None, meta=[] ):
 
     pid = PIDController(p=cfg.PID_P, i=cfg.PID_I, d=cfg.PID_D, debug=False)
     pilot = PID_Pilot(pid, cfg.PID_THROTTLE)
-    V.add(pilot, inputs=['cte/error'], outputs=['pilot/angle', 'pilot/throttle'], run_condition="run_pilot")
+    V.add(pilot, inputs=['cte/error', 'waypoints'], outputs=['pilot/angle', 'pilot/throttle'], run_condition="run_pilot")
 
     pos_plot = PlotPose(scale=cfg.PATH_SCALE, offset=(cfg.D435_IMAGE_W//4,cfg.D435_IMAGE_H//2))
     V.add(pos_plot, inputs=['map/image', 'pos/x', 'pos/y', 'pos/yaw'], outputs=['map/image'])

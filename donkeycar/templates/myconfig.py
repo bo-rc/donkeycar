@@ -21,7 +21,9 @@ D435_IMAGE_H = 240
 D435_IMG_TYPE = "color"
 D435_FRAME_RATE = DRIVE_LOOP_HZ
 
-
+# training will use this
+IMAGE_W = T265_IMAGE_W
+IMAGE_H = T265_IMAGE_H
 
 #USE_RS_IMU = False
 SAVE_ROUTE_BTN = 'y_button'        # joystick button to save path
