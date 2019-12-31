@@ -6,9 +6,72 @@ import time
 import math
 import pickle
 import serial
+import logging
 import numpy as np
 from donkeycar.utils import norm_deg, dist, deg2rad, arr_to_img
 from PIL import Image, ImageDraw
+
+class YdLidar(object):
+    '''
+    https://pypi.org/project/PyLidar3/
+    '''
+    def __init__(self, port='/dev/ttyUSB0', model='G4', chunk_size='6000', freq=15):
+        '''
+        tune chunk_size for the speed of your compute board
+        default G4 uses '6000'
+        '''
+        
+        if model == 'G4':
+            from PyLidar3 import YdLidarG4, FrequencyStep
+        else:
+            raise Exception("YdLidar module currently only supports 'G4'.")
+
+        self.port = port
+        self.distances = [] #a list of distance measurements 
+        self.angles = [] # a list of angles corresponding to dist meas above
+        self.lidar = YdLidarG4(port=self.port)
+
+        if (self.lidar.Connect()):
+            print(self.lidar.GetDeviceInfo())
+
+            # # running at 15 Hz
+            # while self.lidar.GetCurrentFrequency() % 1 != 0:
+            #     print("adjusting scanning frequency: ")
+            #     self.lidar.IncreaseCurrentFrequency(FrequencyStep.oneTenthHertz)
+            # while self.lidar.GetCurrentFrequency() < freq - 1:
+            #     print("adjusting scanning frequency: ")
+            #     self.lidar.IncreaseCurrentFrequency(FrequencyStep.oneHertz)
+            # print("Current scanning frequency: ", self.lidar.GetCurrentFrequency())
+            
+            self.gen = self.lidar.StartScanning()
+
+        else:
+            raise Exception("Lidar not connected, port: {}, model:{}".format(self.port, model))
+        self.on = True
+        self.scan = {}
+
+        # from threading import Lock
+        # self.frame_mutex = Lock()
+
+
+    def update(self):
+        while self.on:
+            try:
+                self.scan = next(self.gen)
+                self.angles = list(self.scan.keys())
+                self.distances = list(self.scan.values())
+            except serial.serialutil.SerialException:
+                print('serial.serialutil.SerialException from Lidar. common when shutting down.')
+
+    def run_threaded(self):
+        return self.distances, self.angles
+
+    def shutdown(self):
+        self.on = False
+        time.sleep(2)
+        self.lidar.StopScanning()
+        self.lidar.Disconnect()
+
 
 class RPLidar(object):
     '''
@@ -47,6 +110,55 @@ class RPLidar(object):
         self.lidar.stop_motor()
         self.lidar.disconnect()
 
+
+class YdLidarPlot(object):
+    '''
+    takes the raw lidar measurements and plots it to an image
+    '''
+    PLOT_TYPE_LINE = 0
+    PLOT_TYPE_CIRC = 1
+    def __init__(self, scale=1.0, offset=(0., 0.), color=(255, 0, 0)):
+        self.scale = scale
+        self.offset = offset
+        self.origin = offset
+        self.color = color
+
+        self.max_dist= 8. # mm
+        self.min_dist = 0.2 # m 
+        
+    def plot(self, img, x, y, yaw, ranges, draw):
+        '''
+        scale dist so that max_dist is edge of img (mm)
+        and img is PIL Image, draw the circle using the draw ImageDraw object
+        '''
+        for angle in range(0, ranges.size):
+            if self.min_dist < ranges[angle] < self.max_dist:
+                radian = math.radians(angle + yaw)
+
+                sx = int(x * self.scale + self.offset[0] + 
+                        math.cos(radian) * ranges[angle] * self.scale)
+                sy = int(y * self.scale + self.offset[1] + 
+                        math.sin(radian) * ranges[angle] * self.scale)
+
+                draw.point((sx, sy), fill=(128,128,128))
+            
+    def run(self, img, x, y, yaw, ranges):
+        '''
+        takes two lists of equal length, one of distance values, the other of angles corresponding to the dist meas 
+        '''
+        self.frame = img
+        draw = ImageDraw.Draw(self.frame)
+        self.plot(self.frame, x, -y, yaw, ranges, draw)
+        return self.frame
+    
+    def update(self):
+        pass
+
+    def run_threaded(self, img, x, y, yaw, ranges):
+        return self.run(img, x, y, yaw, ranges)
+
+    def shutdown(self):
+        pass
 
 class LidarPlot(object):
     '''
