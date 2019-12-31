@@ -84,15 +84,15 @@ class RS_T265_StereoRectified(object):
         self.min_disp = 0
         self.num_disp = 112 - self.min_disp # 112 is a magic number from RS examples...
         self.max_disp = self.min_disp + self.num_disp
-        # self.stereo = cv2.StereoSGBM_create(minDisparity = self.min_disp,
-        #                            numDisparities = self.num_disp,
-        #                            blockSize = 16,
-        #                            P1 = 8*3*window_size**2,
-        #                            P2 = 32*3*window_size**2,
-        #                            disp12MaxDiff = 1,
-        #                            uniquenessRatio = 10,
-        #                            speckleWindowSize = 100,
-        #                            speckleRange = 32)
+        self.stereo = cv2.StereoSGBM_create(minDisparity = self.min_disp,
+                                   numDisparities = self.num_disp,
+                                   blockSize = 16,
+                                   P1 = 8*3*window_size**2,
+                                   P2 = 32*3*window_size**2,
+                                   disp12MaxDiff = 1,
+                                   uniquenessRatio = 10,
+                                   speckleWindowSize = 100,
+                                   speckleRange = 32)
         
         # Translate the intrinsics from librealsense into OpenCV
         K_left  = camera_matrix(intrinsics["left"])
