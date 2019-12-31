@@ -181,10 +181,9 @@ class RS_T265_StereoRectified(object):
         img_r = center_undistorted["right"][:,self.max_disp:]
 
         width, height = img_l.shape
-        self.img = np.zeros([height - self.crop_height, width, 3], dtype=np.dtype('B'))
+        self.img = np.zeros([height - self.crop_height, width, 2], dtype=np.dtype('B'))
         self.img[...,0] = np.reshape(img_l[self.crop_height:height,0:width], (height - self.crop_height, width))
         self.img[...,1] = np.reshape(img_r[self.crop_height:height,0:width], (height - self.crop_height, width))
-        self.img[...,2] = np.reshape(img_r[self.crop_height:height,0:width], (height - self.crop_height, width))
 
         # not enough resources on Jetson Nano to perform the following, commenting out ...
         # # compute the disparity on the center of the frames and convert it to a pixel disparity (divide by DISP_SCALE=16)

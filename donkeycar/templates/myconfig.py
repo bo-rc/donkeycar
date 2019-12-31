@@ -6,7 +6,7 @@ DRIVE_LOOP_HZ = 15
 CAMERA_FRAMERATE = DRIVE_LOOP_HZ
 
 # #RealSense CAMERA
-CAMERA_TYPE = 'RS_T265' # ('RS_T265_StereoRectified' | 'CSIC' | 'RS_T265' | 'RS_D435i')
+CAMERA_TYPE = 'RS_T265_StereoRectified' # ('RS_T265_StereoRectified' | 'CSIC' | 'RS_T265' | 'RS_D435i')
 
 CSIC_IMAGE_W = 224
 CSIC_IMAGE_H = 224
@@ -15,6 +15,7 @@ CSIC_CAM_GSTREAMER_FLIP_PARM = 2 # rotate image 180
 T265_IMAGE_W = 240
 T265_IMAGE_H = 140
 T265_FOV = 120
+IMAGE_DEPTH = 2
 
 D435_IMAGE_W = 424 
 D435_IMAGE_H = 240
@@ -53,7 +54,7 @@ THROTTLE_FORWARD_PWM = 480      #pwm value for max forward throttle
 THROTTLE_STOPPED_PWM = 390      #pwm value for no movement
 THROTTLE_REVERSE_PWM = 300      #pwm value for max reverse throttle
 
-DEFAULT_MODEL_TYPE = 'rnn'   #(linear|categorical|rnn|imu|motion|behavior|3d|localizer|latent)
+DEFAULT_MODEL_TYPE = 'linear'   #(linear|categorical|rnn|imu|motion|behavior|3d|localizer|latent)
 
 CONTROLLER_TYPE='xbox'               #(ps3|ps4|xbox|nimbus|wiiu|F710|rc3)# import os
 AUTO_RECORD_ON_THROTTLE = False      #if true, we will record whenever throttle is not zero. 

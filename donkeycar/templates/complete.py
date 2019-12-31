@@ -146,6 +146,21 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
         #of managing steering, throttle, and modes, and more.
         ctr = LocalWebController()
 
+    class StereoImg:
+        def run(self, img_arr):
+            if img_arr.shape[-1] == 2:
+                height, width, _ = img_arr.shape
+                img = np.zeros([height, width, 3], dtype=np.dtype('B'))
+                img[...,0] = img_arr[...,0]
+                img[...,1] = img_arr[...,1]
+                img[...,2] = img_arr[...,1] - img_arr[...,0]
+                return img
+            return img_arr
+    
+    if cfg.CAMERA_TYPE == "RS_T265_StereoRectified":
+        V.add(StereoImg(),
+            inputs=['cam/image_array'],
+            outputs=['cam/image_array'])
     
     V.add(ctr, 
           inputs=['cam/image_array'],
