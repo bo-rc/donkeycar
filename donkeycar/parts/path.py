@@ -361,6 +361,7 @@ class Navigator(object):
         self.wpts = []
         self.target = {'idx': 0, 'pos': numpy.array([0., 0.]), 'distance': 0.}
         self.wpt_reach_tolerance = wpt_reach_tolerance
+        self.destinationReached = False
     
     def _print_nav_info(self):
         print("Navigation target: {}, distance: {:.2f} m".format(self.target['idx'], self.target['distance']))
@@ -372,12 +373,16 @@ class Navigator(object):
         self.target['pos'] = self.wpts[self.target['idx']]['position']
         self.target['distance'] = numpy.linalg.norm( self.pos - self.target['pos'])
 
+        self.destinationReached = False
+
     def _decrease_target(self):
         self.target['idx'] -= 1
         if self.target['idx'] < 0:
             self.target['idx'] = len(self.wpts) - 1
         self.target['pos'] = self.wpts[self.target['idx']]['position']
         self.target['distance'] = numpy.linalg.norm( self.pos - self.target['pos'])
+
+        self.destinationReached = False
 
     def increase_target(self):
         if len(self.wpts) > 0:
@@ -400,8 +405,8 @@ class Navigator(object):
 
         if len(self.wpts) == 0:
             self.target = {'idx': 0, 'pos': numpy.array([0., 0.]), 'distance': 0.}
-            return 0
-        else:
+            return False, 0
+        elif not self.destinationReached:
             self.target['pos'] = (
                                     waypoints[self.target['idx']]['position'][0], 
                                     waypoints[self.target['idx']]['position'][1]
@@ -410,8 +415,11 @@ class Navigator(object):
 
             if self.target['distance'] < self.wpt_reach_tolerance:
                 print("waypoint ", self.target['idx'], "reached! tolerance: ", self.wpt_reach_tolerance, " m.")
+                if len(self.wpts) == 1:
+                    self.destinationReached = True
+                    return False, 0
                 self.increase_target()
-                return 0.
+                return True, 0.
 
             # compute error for PID control
             dest_dir = Vec3(self.target['pos'][0] - self.pos[0], self.target['pos'][1] - self.pos[1], 0).normalized()
@@ -424,9 +432,9 @@ class Navigator(object):
             # print("dest vec = ",  dest_dir.x,dest_dir.y)
 
             if error.z > 0.0 :
-                return error.mag()
+                return True, error.mag()
             else:
-                return -error.mag()
+                return True, -error.mag()
     
     def update(self):
         pass
@@ -440,8 +448,8 @@ class PID_Pilot(object):
         self.pid = pid
         self.throttle = throttle
 
-    def run(self, cte, route):
-        if len(route) == 0:
+    def run(self, shouldRun, cte):
+        if not shouldRun:
             return 0., 0.
         else:
             steer = self.pid.run(cte)

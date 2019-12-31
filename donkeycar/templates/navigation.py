@@ -98,7 +98,7 @@ def drive( cfg, model_path=None, meta=[] ):
     V.add(PilotCondition(), inputs=['user/mode'], outputs=['run_pilot'])
 
     myRoute = Route(min_dist=cfg.PATH_MIN_DIST)
-    V.add(myRoute, inputs=['pos/x', 'pos/y'], outputs=['path','waypoints'], threaded=True)
+    V.add(myRoute, inputs=['pos/x', 'pos/y'], outputs=['nav/path','nav/waypoints'], threaded=True)
 
     if os.path.exists(cfg.RS_ROUTE_FILE):
         myRoute.load(cfg.RS_ROUTE_FILE)
@@ -120,21 +120,21 @@ def drive( cfg, model_path=None, meta=[] ):
     V.add(img, outputs=['map/image'])
 
     plot = WaypointPlot(scale=cfg.PATH_SCALE, offset=(cfg.D435_IMAGE_W//4,cfg.D435_IMAGE_H//2), color=(0,0,255))
-    V.add(plot, inputs=['map/image', 'waypoints'], outputs=['map/image'],threaded=True)
+    V.add(plot, inputs=['map/image', 'nav/waypoints'], outputs=['map/image'],threaded=True)
 
     plot = PathPlot(scale=cfg.PATH_SCALE, offset=(cfg.D435_IMAGE_W//4,cfg.D435_IMAGE_H//2), color=(0,0,255))
-    V.add(plot, inputs=['map/image', 'path'], outputs=['map/image'],threaded=True)
+    V.add(plot, inputs=['map/image', 'nav/path'], outputs=['map/image'],threaded=True)
 
     # this is error function for PID control
     nav = Navigator(wpt_reach_tolerance=cfg.WPT_TOLERANCE)
-    V.add(nav, inputs=['waypoints', 'pos/x', 'pos/y', 'pos/yaw'], outputs=['cte/error'], threaded=True, run_condition="run_pilot")
+    V.add(nav, inputs=['nav/waypoints', 'pos/x', 'pos/y', 'pos/yaw'], outputs=['nav/shouldRun', 'nav/error'], threaded=True, run_condition="run_pilot")
 
     ctr.set_button_down_trigger("left_shoulder", nav.decrease_target)
     ctr.set_button_down_trigger("right_shoulder", nav.increase_target)
 
     pid = PIDController(p=cfg.PID_P, i=cfg.PID_I, d=cfg.PID_D, debug=False)
     pilot = PID_Pilot(pid, cfg.PID_THROTTLE)
-    V.add(pilot, inputs=['cte/error', 'waypoints'], outputs=['pilot/angle', 'pilot/throttle'], run_condition="run_pilot")
+    V.add(pilot, inputs=['nav/shouldRun', 'nav/error'], outputs=['pilot/angle', 'pilot/throttle'], run_condition="run_pilot")
 
     pos_plot = PlotPose(scale=cfg.PATH_SCALE, offset=(cfg.D435_IMAGE_W//4,cfg.D435_IMAGE_H//2))
     V.add(pos_plot, inputs=['map/image', 'pos/x', 'pos/y', 'pos/yaw'], outputs=['map/image'])
