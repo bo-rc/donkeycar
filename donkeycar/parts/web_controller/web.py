@@ -241,7 +241,8 @@ class VideoAPI_map(tornado.web.RequestHandler):
         while True:
             
             interval = .1
-            if self.served_image_timestamp + interval < time.time():  
+            if self.served_image_timestamp + interval < time.time():
+
                 img = utils.arr_to_binary(np.vstack([self.application.img_arr, self.application.map_arr]))
 
                 self.write(my_boundary)
@@ -269,7 +270,8 @@ class VideoAPI(tornado.web.RequestHandler):
         while True:
             
             interval = .1
-            if self.served_image_timestamp + interval < time.time():        
+            if self.served_image_timestamp + interval < time.time():
+
                 img = utils.arr_to_binary(self.application.img_arr)
 
                 self.write(my_boundary)
