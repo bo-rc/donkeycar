@@ -135,7 +135,7 @@ class PathPlot(object):
             # flip y because on image y increases downwards
             draw.point((ax * self.scale + self.offset[0],
                       -ay * self.scale + self.offset[1]),
-                      fill=self.color)
+                      fill=(255,0,0))
 
     def run(self, img, path):
         if type(img) is numpy.ndarray:

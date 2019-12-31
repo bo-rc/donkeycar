@@ -237,6 +237,27 @@ def drive( cfg, model_path=None, meta=[] ):
 
             return 0
 
+    if True:
+        from donkeycar.parts.lidar import YdLidar, YdLidarPlot
+        V.add(YdLidar(chunk_size='5000', freq=15), inputs=[], outputs=['lidar/distances', 'lidar/angles'], threaded=True)
+
+        class YdLidarBuffer:
+            def __init__(self):
+                self.distances = []
+                for _ in range(0,360):
+                    self.distances.append(0.0)
+                
+                self.arr = np.array(self.distances)
+
+            def run(self, distances, angles):
+                self.arr[angles] = distances
+                self.arr[angles] /= 1000.0
+                return self.arr
+
+        V.add(YdLidarBuffer(), inputs=['lidar/distances', 'lidar/angles'], outputs=['lidar/range'])
+        V.add(YdLidarPlot(scale=cfg.PATH_SCALE, offset=(cfg.D435_IMAGE_W//4,cfg.D435_IMAGE_H//2)), 
+            inputs=['map/image', 'pos/x', 'pos/y', 'pos/yaw', 'lidar/range'], outputs=['map/image'], threaded=False)
+
     V.add(RecordTracker(), inputs=["tub/num_records"], outputs=['records/alert'])
 
     th = TubHandler(path=cfg.DATA_PATH)
