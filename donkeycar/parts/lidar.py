@@ -133,13 +133,12 @@ class YdLidarPlot(object):
         '''
         for angle in range(0, ranges.size):
             if self.min_dist < ranges[angle] < self.max_dist:
-                plot_angle = int(min(359, angle + yaw))
+                plot_angle = round(min(359, angle + yaw))
+
                 radian = math.radians(plot_angle)
 
-                sx = int(x * self.scale + self.offset[0] + 
-                        math.cos(radian) * ranges[plot_angle] * self.scale)
-                sy = int(y * self.scale + self.offset[1] + 
-                        math.sin(radian) * ranges[plot_angle] * self.scale)
+                sx = round(x * self.scale + self.offset[0] + math.cos(radian) * ranges[plot_angle] * self.scale)
+                sy = round(y * self.scale + self.offset[1] + math.sin(radian) * ranges[plot_angle] * self.scale)
 
                 draw.point((sx, sy), fill=(128,128,128))
             
@@ -214,10 +213,10 @@ class LidarPlot(object):
         elif dist > max_pixel:
             dist = max_pixel
         theta = np.radians(theta)
-        sx = int(math.cos(theta) * dist + center[0])
-        sy = int(math.sin(theta) * dist + center[1])
-        ex = int(math.cos(theta) * (dist + 2 * self.rad) + center[0])
-        ey = int(math.sin(theta) * (dist + 2 * self.rad) + center[1])
+        sx = round(math.cos(theta) * dist + center[0])
+        sy = round(math.sin(theta) * dist + center[1])
+        ex = round(math.cos(theta) * (dist + 2 * self.rad) + center[0])
+        ey = round(math.sin(theta) * (dist + 2 * self.rad) + center[1])
         fill = 128
 
         draw.ellipse((min(sx, ex), min(sy, ey), max(sx, ex), max(sy, ey)), fill=(fill, fill, fill))
