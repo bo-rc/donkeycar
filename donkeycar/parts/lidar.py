@@ -133,12 +133,13 @@ class YdLidarPlot(object):
         '''
         for angle in range(0, ranges.size):
             if self.min_dist < ranges[angle] < self.max_dist:
-                radian = math.radians(angle + yaw)
+                plot_angle = int(min(359, angle + yaw))
+                radian = math.radians(plot_angle)
 
                 sx = int(x * self.scale + self.offset[0] + 
-                        math.cos(radian) * ranges[angle] * self.scale)
+                        math.cos(radian) * ranges[plot_angle] * self.scale)
                 sy = int(y * self.scale + self.offset[1] + 
-                        math.sin(radian) * ranges[angle] * self.scale)
+                        math.sin(radian) * ranges[plot_angle] * self.scale)
 
                 draw.point((sx, sy), fill=(128,128,128))
             
