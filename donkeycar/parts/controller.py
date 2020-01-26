@@ -1127,8 +1127,8 @@ class XboxOneJoystickController(JoystickController):
         }
 
         self.axis_trigger_map = {
-            'left_stick_horz' : self.set_steering,
-            'right_stick_vert' : self.set_throttle,
+            'left_stick_horz': self.set_steering,
+            'right_trigger': self.set_throttle,
             # Forza Mode
             'right_trigger': self.magnitude(),
             'left_trigger': self.magnitude(reversed = True),
