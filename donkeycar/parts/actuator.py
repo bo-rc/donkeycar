@@ -19,9 +19,7 @@ PY2 = version_info[0] == 2   #Running Python 2.x?
 # Maestro Servo Controller
 #---------------------------
 #
-# Support for the Pololu Maestro line of servo controllers
-#
-# Steven Jacobs -- Aug 2013
+# refer to
 # https://github.com/FRC4564/Maestro/
 #
 # These functions provide access to many of the Maestro's capabilities using the
@@ -189,12 +187,16 @@ class MaestroSteering:
     def __init__(self, controller=None,
                        chan = 0,
                        left_pulse=4500,
-                       right_pulse=7500):
+                       right_pulse=7500,
+                       reverse = False):
 
         self.controller = controller
         self.chan = 0
         self.left_pulse = left_pulse
         self.right_pulse = right_pulse
+        if reverse:
+            self.left_pulse = right_pulse
+            self.right_pulse = left_pulse
 
 
     def run(self, angle):
@@ -217,11 +219,16 @@ class MaestroThrottle:
 
     def __init__(self, controller=None,
                        min_pulse=3000,
-                       max_pulse=9000):
+                       max_pulse=9000,
+                       reverse = False):
 
         self.controller = controller
         self.min_pulse = min_pulse
         self.max_pulse = max_pulse
+
+        if reverse:
+            self.min_pulse = max_pulse
+            self.max_pulse = min_pulse
 
 
     def run(self, throttle):
