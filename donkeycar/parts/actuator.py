@@ -89,7 +89,7 @@ class MaestroController:
     # Typcially valid servo range is 3000 to 9000 quarter-microseconds
     # If channel is configured for digital output, values < 6000 = Low ouput
     def setTarget(self, chan, target):
-        print("Maestro: ", chan, " target: ", target)
+        # print("Maestro: ", chan, " target: ", target)
         # if Min is defined and Target is below, force to Min
         if self.Mins[chan] > 0 and target < self.Mins[chan]:
             target = self.Mins[chan]
