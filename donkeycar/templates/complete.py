@@ -467,6 +467,17 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
     if cfg.DONKEY_GYM:
         pass
 
+    elif cfg.DRIVE_TRAIN_TYPE == "MAESTRO":
+        from donkeycar.parts.actuator import MaestroController, MaestroSteering, MaestroThrottle
+
+        controller = MaestroController(ttyStr='/dev/ttyACM0')
+        steering = MaestroSteering(controller=controller)
+        
+        throttle = MaestroThrottle(controller=controller)
+
+        V.add(steering, inputs=['angle'])
+        V.add(throttle, inputs=['throttle'])
+
     elif cfg.DRIVE_TRAIN_TYPE == "SERVO_ESC":
         from donkeycar.parts.actuator import PCA9685, PWMSteering, PWMThrottle
 
