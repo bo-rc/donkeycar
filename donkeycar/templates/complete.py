@@ -82,6 +82,11 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
         V.add(StereoPair(), inputs=['cam/image_array_a', 'cam/image_array_b'], 
             outputs=['cam/image_array'])
 
+    elif cfg.CAMERA_TYPE == "RS_T265_Stereo":
+        from donkeycar.parts.realsense2 import RS_T265
+        cam = RS_T265(stereo_output=True)
+        V.add(cam, outputs=['cam/image_array_a', 'cam/image_array_b'], threaded=True)
+        
     else:
         print("cfg.CAMERA_TYPE", cfg.CAMERA_TYPE)
         if cfg.DONKEY_GYM:
@@ -89,7 +94,7 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
         
         inputs = []
         threaded = True
-        print("cfg.CAMERA_TYPE", cfg.CAMERA_TYPE)
+
         if cfg.DONKEY_GYM:
             from donkeycar.parts.dgym import DonkeyGymEnv 
             cam = DonkeyGymEnv(cfg.DONKEY_SIM_PATH, env_name=cfg.DONKEY_GYM_ENV_NAME)
@@ -162,14 +167,20 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
             inputs=['cam/image_array'],
             outputs=['cam/image_array'])
     
-    V.add(ctr, 
-          inputs=['cam/image_array'],
+    if cfg.CAMERA_TYPE == "RS_T265_Stereo":
+        V.add(ctr, 
+          inputs=['cam/image_array_b'],
           outputs=['user/angle', 'user/throttle', 'user/mode', 'recording'],
           threaded=True)
+    else:
+        V.add(ctr, 
+            inputs=['cam/image_array'],
+            outputs=['user/angle', 'user/throttle', 'user/mode', 'recording'],
+            threaded=True)
 
     #this throttle filter will allow one tap back for esc reverse
-    th_filter = ThrottleFilter()
-    V.add(th_filter, inputs=['user/throttle'], outputs=['user/throttle'])
+    #th_filter = ThrottleFilter()
+    #V.add(th_filter, inputs=['user/throttle'], outputs=['user/throttle'])
     
     #See if we should even run the pilot module. 
     #This is only needed because the part run_condition only accepts boolean
@@ -467,6 +478,17 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
     if cfg.DONKEY_GYM:
         pass
 
+    elif cfg.DRIVE_TRAIN_TYPE == "MAESTRO":
+        from donkeycar.parts.actuator import MaestroController, MaestroSteering, MaestroThrottle
+
+        controller = MaestroController(ttyStr='/dev/ttyACM0')
+        steering = MaestroSteering(controller=controller)
+        
+        throttle = MaestroThrottle(controller=controller)
+
+        V.add(steering, inputs=['angle'])
+        V.add(throttle, inputs=['throttle'])
+
     elif cfg.DRIVE_TRAIN_TYPE == "SERVO_ESC":
         from donkeycar.parts.actuator import PCA9685, PWMSteering, PWMThrottle
 
@@ -528,14 +550,24 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
 
     
     #add tub to save data
+    if cfg.CAMERA_TYPE == "RS_T265_Stereo":
+        inputs=['cam/image_array_a',
+                'cam/image_array_b',
+                'user/angle', 
+                'user/throttle', 
+                'user/mode']
 
-    inputs=['cam/image_array',
-            'user/angle', 'user/throttle', 
-            'user/mode']
+        types=['image_array',
+               'image_array',
+               'float', 'float', 'str']
+    else:
+        inputs=['cam/image_array',
+                'user/angle', 'user/throttle', 
+                'user/mode']
 
-    types=['image_array',
-           'float', 'float',
-           'str']
+        types=['image_array',
+            'float', 'float',
+            'str']
 
     if cfg.TRAIN_BEHAVIORS:
         inputs += ['behavior/state', 'behavior/label', "behavior/one_hot_state_array"]
