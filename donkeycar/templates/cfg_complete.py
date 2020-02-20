@@ -21,17 +21,30 @@ DATA_PATH = os.path.join(CAR_PATH, 'data')
 MODELS_PATH = os.path.join(CAR_PATH, 'models')
 
 #VEHICLE
-DRIVE_LOOP_HZ = 20      # the vehicle loop will pause if faster than this speed.
+DRIVE_LOOP_HZ = 30      # the vehicle loop will pause if faster than this speed.
 MAX_LOOPS = None        # the vehicle loop can abort after this many iterations, when given a positive integer.
 
 #CAMERA
-CAMERA_TYPE = "PICAM"   # (PICAM|WEBCAM|CVCAM|CSIC|V4L|MOCK)
-IMAGE_W = 160
-IMAGE_H = 120
+CAMERA_TYPE = "CSI_Stereo"   # (PICAM|WEBCAM|CVCAM|CSIC|CSI_Stereo|RS_T265|RS_T265_StereoRectified|RS_D435i| V4L|MOCK)
 IMAGE_DEPTH = 3         # default RGB=3, make 1 for mono
 CAMERA_FRAMERATE = DRIVE_LOOP_HZ
 # For CSIC camera - If the camera is mounted in a rotated position, changing the below parameter will correct the output frame orientation
-CSIC_CAM_GSTREAMER_FLIP_PARM = 0 # (0 => none , 4 => Flip horizontally, 6 => Flip vertically)
+CSIC_IMAGE_W = 224
+CSIC_IMAGE_H = 224
+CSIC_CAM_GSTREAMER_FLIP_PARM = 2 # rotate image 180
+
+T265_IMAGE_W = 240
+T265_IMAGE_H = 140
+T265_FOV = 135
+
+D435_IMAGE_W = 424 
+D435_IMAGE_H = 240
+D435_IMG_TYPE = "color"
+D435_FRAME_RATE = DRIVE_LOOP_HZ
+
+# training will use this
+IMAGE_W = CSIC_IMAGE_W
+IMAGE_H = CSIC_IMAGE_H
 
 #9865, over rides only if needed, ie. TX2..
 PCA9685_I2C_ADDR = 0x40     #I2C address, use i2cdetect to validate this number
@@ -42,7 +55,13 @@ PCA9685_I2C_BUSNUM = None   #None will auto detect, which is fine on the pi. But
 #DC_STEER_THROTTLE uses HBridge pwm to control one steering dc motor, and one drive wheel motor
 #DC_TWO_WHEEL uses HBridge pwm to control two drive motors, one on the left, and one on the right.
 #SERVO_HBRIDGE_PWM use ServoBlaster to output pwm control from the PiZero directly to control steering, and HBridge for a drive motor.
-DRIVE_TRAIN_TYPE = "SERVO_ESC" # SERVO_ESC|DC_STEER_THROTTLE|DC_TWO_WHEEL|SERVO_HBRIDGE_PWM
+DRIVE_TRAIN_TYPE = "MAESTRO" # MAESTRO|SERVO_ESC|DC_STEER_THROTTLE|DC_TWO_WHEEL|SERVO_HBRIDGE_PWM
+MAESTRO_STEERING_LEFT_PWM = 4500 #pwm value for full left steering
+MAESTRO_STEERING_RIGHT_PWM = 7500 #pwm value for full right steering
+MAESTRO_THROTTLE_MIN_PWM = 4000 #pwm value for full throttle 
+MAESTRO_THROTTLE_MAX_PWM = 8000 #pwm value for full throttle 
+MAESTRO_THROTTLE_REVERSE = 0
+MAESTRO_STERRING_REVERSE = 1
 
 #STEERING
 STEERING_CHANNEL = 1            #channel on the 9685 pwm board 0-15
@@ -74,8 +93,8 @@ HBRIDGE_PIN_RIGHT_BWD = 13
 #The DEFAULT_MODEL_TYPE will choose which model will be created at training time. This chooses
 #between different neural network designs. You can override this setting by passing the command
 #line parameter --type to the python manage.py train and drive commands.
-DEFAULT_MODEL_TYPE = 'linear'   #(linear|categorical|rnn|imu|behavior|3d|localizer|latent)
-BATCH_SIZE = 128                #how many records to use when doing one pass of gradient decent. Use a smaller number if your gpu is running out of memory.
+DEFAULT_MODEL_TYPE = 'rnn'   #(linear|categorical|rnn|imu|behavior|3d|localizer|latent)
+BATCH_SIZE = 64                #how many records to use when doing one pass of gradient decent. Use a smaller number if your gpu is running out of memory.
 TRAIN_TEST_SPLIT = 0.8          #what percent of records to use for training. the remaining used for validation.
 MAX_EPOCHS = 100                #how many times to visit all records of your data
 SHOW_PLOT = True                #would you like to see a pop up display of final loss?
@@ -122,7 +141,7 @@ USE_JOYSTICK_AS_DEFAULT = False     #when starting the manage.py, when True, wil
 JOYSTICK_MAX_THROTTLE = 0.5         #this scalar is multiplied with the -1 to 1 throttle value to limit the maximum throttle. This can help if you drop the controller or just don't need the full speed available.
 JOYSTICK_STEERING_SCALE = 1.0       #some people want a steering that is less sensitve. This scalar is multiplied with the steering -1 to 1. It can be negative to reverse dir.
 AUTO_RECORD_ON_THROTTLE = True      #if true, we will record whenever throttle is not zero. if false, you must manually toggle recording with some other trigger. Usually circle button on joystick.
-CONTROLLER_TYPE='ps3'               #(ps3|ps4|xbox|nimbus|wiiu|F710|rc3)
+CONTROLLER_TYPE='xbox'               #(ps3|ps4|xbox|nimbus|wiiu|F710|rc3)
 USE_NETWORKED_JS = False            #should we listen for remote joystick control over the network?
 NETWORK_JS_SERVER_IP = "192.168.0.1"#when listening for network joystick control, which ip is serving this information
 JOYSTICK_DEADZONE = 0.0             # when non zero, this is the smallest throttle before recording triggered.

@@ -191,6 +191,90 @@ class CSICamera(BaseCamera):
         time.sleep(.5)
         del(self.camera)
 
+class CSI_Stereo(BaseCamera):
+    '''
+    Camera for Jetson Nano IMX219 based camera
+    Credit: https://github.com/feicccccccc/donkeycar/blob/dev/donkeycar/parts/camera.py
+    gstreamer init string from https://github.com/NVIDIA-AI-IOT/jetbot/blob/master/jetbot/camera.py
+    '''
+    def gstreamer_pipeline(self, cam_id=0, capture_width=3280, capture_height=2464, output_width=224, output_height=224, framerate=21, flip_method=0) :   
+        return 'nvarguscamerasrc sensor-id=%d ! video/x-raw(memory:NVMM), width=%d, height=%d, format=(string)NV12, framerate=(fraction)%d/1 ! nvvidconv flip-method=%d ! nvvidconv ! video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx ! videoconvert ! appsink' % (
+                cam_id, capture_width, capture_height, framerate, flip_method, output_width, output_height)
+    
+    def __init__(self, image_w=160, image_h=120, image_d=3, capture_width=3280, capture_height=2464, framerate=60, gstreamer_flip=0):
+        '''
+        gstreamer_flip = 0 - no flip
+        gstreamer_flip = 1 - rotate CCW 90
+        gstreamer_flip = 2 - flip vertically
+        gstreamer_flip = 3 - rotate CW 90
+        '''
+        self.w = image_w
+        self.h = image_h
+        self.running = True
+        self.frame0 = None
+        self.frame1 = None
+        self.flip_method = gstreamer_flip
+        self.capture_width = capture_width
+        self.capture_height = capture_height
+        self.framerate = framerate
+
+    def init_camera(self):
+        import cv2
+
+        # initialize the camera and stream
+        self.camera0 = cv2.VideoCapture(
+            self.gstreamer_pipeline(
+                cam_id = 0,
+                capture_width =self.capture_width,
+                capture_height =self.capture_height,
+                output_width=self.w,
+                output_height=self.h,
+                framerate=self.framerate,
+                flip_method=self.flip_method),
+            cv2.CAP_GSTREAMER)
+
+        self.camera1 = cv2.VideoCapture(
+            self.gstreamer_pipeline(
+                cam_id = 1,
+                capture_width =self.capture_width,
+                capture_height =self.capture_height,
+                output_width=self.w,
+                output_height=self.h,
+                framerate=self.framerate,
+                flip_method=self.flip_method),
+            cv2.CAP_GSTREAMER)
+
+        self.poll_camera()
+        print('CSI_Stereo cameras loaded.. .warming cameras')
+        time.sleep(2)
+        
+    def update(self):
+        self.init_camera()
+        while self.running:
+            self.poll_camera()
+
+    def poll_camera(self):
+        import cv2
+        self.ret , frame0 = self.camera0.read()
+        self.frame0 = cv2.cvtColor(frame0, cv2.COLOR_BGR2RGB)
+        self.ret , frame1 = self.camera1.read()
+        self.frame1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2RGB)
+
+    def run(self):
+        self.poll_camera()
+        return self.frame0, self.frame1
+
+    def run_threaded(self):
+        return self.frame0, self.frame1
+    
+    def shutdown(self):
+        self.running = False
+        print('stoping stereo CSICamera')
+        time.sleep(.5)
+        del(self.camera0)
+        time.sleep(.5)
+        del(self.camera1)
+
 class V4LCamera(BaseCamera):
     '''
     uses the v4l2capture library from this fork for python3 support: https://github.com/atareao/python3-v4l2capture

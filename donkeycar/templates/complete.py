@@ -86,6 +86,11 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
         from donkeycar.parts.realsense2 import RS_T265
         cam = RS_T265(stereo_output=True)
         V.add(cam, outputs=['cam/image_array_a', 'cam/image_array_b'], threaded=True)
+
+    elif cfg.CAMERA_TYPE == "CSI_Stereo":
+        from donkeycar.parts.camera import CSI_Stereo
+        cam = CSI_Stereo(image_w=cfg.CSIC_IMAGE_W, image_h=cfg.CSIC_IMAGE_H, image_d=cfg.IMAGE_DEPTH, framerate=cfg.CAMERA_FRAMERATE, gstreamer_flip=cfg.CSIC_CAM_GSTREAMER_FLIP_PARM)
+        V.add(cam, outputs=['cam/image_array_a', 'cam/image_array_b'], threaded=True)
         
     else:
         print("cfg.CAMERA_TYPE", cfg.CAMERA_TYPE)
@@ -167,7 +172,7 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
             inputs=['cam/image_array'],
             outputs=['cam/image_array'])
     
-    if cfg.CAMERA_TYPE == "RS_T265_Stereo":
+    if cfg.CAMERA_TYPE == "RS_T265_Stereo" or cfg.CAMERA_TYPE == "CSI_Stereo":
         V.add(ctr, 
           inputs=['cam/image_array_b'],
           outputs=['user/angle', 'user/throttle', 'user/mode', 'recording'],
@@ -550,7 +555,7 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
 
     
     #add tub to save data
-    if cfg.CAMERA_TYPE == "RS_T265_Stereo":
+    if cfg.CAMERA_TYPE == "RS_T265_Stereo" or cfg.CAMERA_TYPE == "CSI_Stereo":
         inputs=['cam/image_array_a',
                 'cam/image_array_b',
                 'user/angle', 
