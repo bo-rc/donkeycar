@@ -63,6 +63,8 @@ MAESTRO_THROTTLE_MAX_PWM = 8000 #pwm value for full throttle
 MAESTRO_THROTTLE_REVERSE = 0
 MAESTRO_STERRING_REVERSE = 1
 
+ARDUINO_PWM = 1
+
 #STEERING
 STEERING_CHANNEL = 1            #channel on the 9685 pwm board 0-15
 STEERING_LEFT_PWM = 460         #pwm value for full left steering

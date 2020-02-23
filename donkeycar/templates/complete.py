@@ -85,12 +85,12 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
     elif cfg.CAMERA_TYPE == "RS_T265_Stereo":
         from donkeycar.parts.realsense2 import RS_T265
         cam = RS_T265(stereo_output=True)
-        V.add(cam, outputs=['cam/image_array_a', 'cam/image_array_b'], threaded=True)
+        V.add(cam, outputs=['cam/image_array', 'cam/image_array_b'], threaded=True)
 
     elif cfg.CAMERA_TYPE == "CSI_Stereo":
         from donkeycar.parts.camera import CSI_Stereo
         cam = CSI_Stereo(image_w=cfg.CSIC_IMAGE_W, image_h=cfg.CSIC_IMAGE_H, image_d=cfg.IMAGE_DEPTH, framerate=cfg.CAMERA_FRAMERATE, gstreamer_flip=cfg.CSIC_CAM_GSTREAMER_FLIP_PARM)
-        V.add(cam, outputs=['cam/image_array_a', 'cam/image_array_b'], threaded=True)
+        V.add(cam, outputs=['cam/image_array', 'cam/image_array_b'], threaded=True)
         
     else:
         print("cfg.CAMERA_TYPE", cfg.CAMERA_TYPE)
@@ -172,16 +172,15 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
             inputs=['cam/image_array'],
             outputs=['cam/image_array'])
     
-    if cfg.CAMERA_TYPE == "RS_T265_Stereo" or cfg.CAMERA_TYPE == "CSI_Stereo":
-        V.add(ctr, 
-          inputs=['cam/image_array_b'],
-          outputs=['user/angle', 'user/throttle', 'user/mode', 'recording'],
-          threaded=True)
-    else:
-        V.add(ctr, 
-            inputs=['cam/image_array'],
-            outputs=['user/angle', 'user/throttle', 'user/mode', 'recording'],
-            threaded=True)
+    V.add(ctr, 
+        inputs=['cam/image_array'],
+        outputs=['user/angle', 'user/throttle', 'user/mode', 'recording'],
+        threaded=True)
+
+    # Arduino PWM control
+    if cfg.ARDUINO_PWM == 1 and model_path is None:
+        from donkeycar.parts.ArduinoPWM import ArduinoPWM
+        V.add(ArduinoPWM(port="/dev/ttyACM2", baud=115200), outputs=['user/angle', 'user/throttle', 'recording'], threaded=False)
 
     #this throttle filter will allow one tap back for esc reverse
     #th_filter = ThrottleFilter()
@@ -442,7 +441,6 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
           inputs=['user/mode', 'user/angle', 'user/throttle',
                   'pilot/angle', 'pilot/throttle'], 
           outputs=['angle', 'throttle'])
-
     
     #to give the car a boost when starting ai mode in a race.
     aiLauncher = AiLaunch(cfg.AI_LAUNCH_DURATION, cfg.AI_LAUNCH_THROTTLE, cfg.AI_LAUNCH_KEEP_ENABLED)
@@ -556,7 +554,7 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None, camera_type
     
     #add tub to save data
     if cfg.CAMERA_TYPE == "RS_T265_Stereo" or cfg.CAMERA_TYPE == "CSI_Stereo":
-        inputs=['cam/image_array_a',
+        inputs=['cam/image_array',
                 'cam/image_array_b',
                 'user/angle', 
                 'user/throttle', 
