@@ -16,6 +16,11 @@
 
 ## Placeholder for a tutorial
 
-
+## Xbox controller
+add this to your .profile:
+```bash
+ # xbox bt controller
+ sudo bash -c "echo 1 > /sys/module/bluetooth/parameters/disable_ertm"
+```
 
 ---------------------------------------
